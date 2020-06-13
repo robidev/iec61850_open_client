@@ -33,7 +33,7 @@ install the library
 
 cd to the client project dir.
 
-`$ ../iec61850_open_client`
+`$ cd ../iec61850_open_client`
 
 also the prerequesites for flask are needed;
 
@@ -41,7 +41,7 @@ also the prerequesites for flask are needed;
 
 then start the app;
 
-`$ python3 app`
+`$ python3 app.py`
 
 and browse to 
 
