@@ -20,6 +20,7 @@ class iec61850client():
 		self.polling = {}
 		self.connections = {}
 		self.readvaluecallback = readvaluecallback
+		self.cb_refs = [] # used to ensure the garbage collector does not clean up used callbacks
 
 
 	@staticmethod
@@ -694,7 +695,37 @@ class iec61850client():
 		return
 
 
-	def operate(self, ref, value, control = None):
+	def get_controlObject(self, tupl, uri_ref):
+		control = None
+		con = self.connections[tupl]['con']
+
+		if not 'control' in self.connections[tupl]:
+			self.connections[tupl]['control'] = {}
+
+		if not uri_ref.path[1:] in self.connections[tupl]['control'] or self.connections[tupl]['control'][ uri_ref.path[1:] ] == None:
+
+			control = lib61850.ControlObjectClient_create(uri_ref.path[1:], con)
+
+			self.connections[tupl]['control'][ uri_ref.path[1:] ] = control
+
+			ctlModel = lib61850.ControlObjectClient_getControlModel(control)
+			if ctlModel == lib61850.CONTROL_MODEL_DIRECT_ENHANCED or ctlModel == lib61850.CONTROL_MODEL_SBO_ENHANCED:
+				logger.debug("enhanced security")
+				cb = lib61850.CommandTerminationHandler(self.commandTerminationHandler_cb)
+
+				ref = bytes(uri_ref.path[1:].encode('utf-8'))
+
+				lib61850.ControlObjectClient_setCommandTerminationHandler(control, cb, ctypes.c_char_p( ref ))
+				self.cb_refs.append(cb) # hard reference to ensure this pointer is not cleaned by the garbage collector
+				self.cb_refs.append(ref)
+			else:
+				logger.debug("normal security")
+		else:
+			control = self.connections[tupl]['control'][ uri_ref.path[1:] ]
+		return control
+
+
+	def operate(self, ref, value):
 		error = -1
 
 		if ref != None:
@@ -705,37 +736,25 @@ class iec61850client():
 		# if port is explicitly defined as "" or None, assume 102
 		if port == "" or port == None:
 			port = 102
-
+		
 		err = self.getIED(hostname, port)
 		if err == 0:
 			tupl =  hostname + ":" + str(port)
-			con = self.connections[tupl]['con']
 
-			if control == None:
-				control = lib61850.ControlObjectClient_create(uri_ref.path[1:], con)
-				ctlModel = lib61850.ControlObjectClient_getControlModel(control)
-				if ctlModel == lib61850.CONTROL_MODEL_DIRECT_ENHANCED or ctlModel == lib61850.CONTROL_MODEL_SBO_ENHANCED:
-					logger.debug("enhanced security")
-					cb = lib61850.CommandTerminationHandler(self.commandTerminationHandler_cb)
-					lib61850.ControlObjectClient_setCommandTerminationHandler(control, cb, "Operate")
-				else:
-					logger.debug("normal security")
-				lib61850.ControlObjectClient_setOrigin(control, "mmi", 3)
-
+			control = self.get_controlObject(tupl, uri_ref)
+			
+			lib61850.ControlObjectClient_setOrigin(control, "mmi", 3)
 			mmsType = lib61850.ControlObjectClient_getCtlValType(control)
 			ctlVal = iec61850client.getMMsValue("",value,0,mmsType)
-			
+
 			error = lib61850.ControlObjectClient_operate(control, ctlVal, 0)
 
 			time.sleep(2)
-			lib61850.MmsValue_delete(ctlVal)
-			lib61850.ControlObjectClient_destroy(control)
-		
+			lib61850.MmsValue_delete(ctlVal)		
 		return error
 
 	def select(self, ref, value):
 		error = -1
-		control = None
 
 		if ref != None:
 			uri_ref = urlparse(ref)
@@ -749,8 +768,8 @@ class iec61850client():
 		err = self.getIED(hostname, port)
 		if err == 0:
 			tupl =  hostname + ":" + str(port)
-			con = self.connections[tupl]['con']
-			control = lib61850.ControlObjectClient_create(uri_ref.path[1:], con)
+
+			control = self.get_controlObject(tupl, uri_ref)
 
 			ctlModel = lib61850.ControlObjectClient_getControlModel(control)
 			if ctlModel == lib61850.CONTROL_MODEL_SBO_NORMAL:
@@ -759,8 +778,6 @@ class iec61850client():
 
 			elif ctlModel == lib61850.CONTROL_MODEL_SBO_ENHANCED:
 				logger.debug("SBOw ctlmodel")
-				cb = lib61850.CommandTerminationHandler(self.commandTerminationHandler_cb)
-				lib61850.ControlObjectClient_setCommandTerminationHandler(control, cb, "Select")
 
 				mmsType = lib61850.ControlObjectClient_getCtlValType(control)
 				ctlVal = iec61850client.getMMsValue("",value,0,mmsType)
@@ -769,18 +786,15 @@ class iec61850client():
 
 				time.sleep(2)
 				lib61850.MmsValue_delete(ctlVal)
-				#lib61850.ControlObjectClient_destroy(control)
+
 			else:
 				logger.error("cannot select object with ctlmodel: %i" % ctlModel)
 				error = -1
-				lib61850.ControlObjectClient_destroy(control)
-				control = None
 
-		return error, control
+		return error
 
-	def cancel(self, ref, control = None):
+	def cancel(self, ref):
 		error = -1
-		control = None
 
 		if ref != None:
 			uri_ref = urlparse(ref)
@@ -794,13 +808,10 @@ class iec61850client():
 		err = self.getIED(hostname, port)
 		if err == 0:
 			tupl =  hostname + ":" + str(port)
-			con = self.connections[tupl]['con']
-			if control == None:
-				control = lib61850.ControlObjectClient_create(uri_ref.path[1:], con)
+			control = self.get_controlObject(tupl, uri_ref)
 			error = lib61850.ControlObjectClient_cancel(control)
-			lib61850.ControlObjectClient_destroy(control)
 
-		return error, control
+		return error
 
 def cb(a,b):
 	print("cb called!")
@@ -893,13 +904,24 @@ if __name__=="__main__":
 	#time.sleep(0.719)
 	#cl.poll()
 	#cl.registerWriteValue("iec61850://127.0.0.1:9102/IED3_SMVMUnn/LLN0.MSVCB01.SvEna",True)
-	error, control = cl.select("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI1.Pos", True)
+	error = cl.select("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI1.Pos", "True")
 	if error == 1:
 		print("selected successfully")
 	else:
 		print("failed to select")	
 	#control = None
-	if cl.operate("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI1.Pos", True, control) == 1:
+	if cl.operate("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI1.Pos", "True") == 1:
+		print("operated successfully")
+	else:
+		print("failed to operate")
+	
+	error = cl.select("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI2.Pos", "True")
+	if error == 1:
+		print("selected successfully")
+	else:
+		print("failed to select")	
+	#control = None
+	if cl.operate("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI2.Pos", "True") == 1:
 		print("operated successfully")
 	else:
 		print("failed to operate")
