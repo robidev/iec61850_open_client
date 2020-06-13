@@ -1,47 +1,39 @@
-load svg, with single-line diagram in webclient from file
+# iec61850_open_client
 
-interactive id-elements should be related to IED/LN.Do.Da, if webclient should read/write value from server by socketio
-desc/title can be used to register+display type/instance/ref
+This is an open implementation of an IEC 61850 web based client. It uses flask with websockets for the webserver.
+The backend is a python3 based iec61850 client implementation that uses ctypes for the wrapper.
 
-javascript to generate list of values that can be written/read, by type(switch/measure / setting/button)
-writable= dialog box via javascript
-readable= register for polling/reporting by python server backend
+The client is configured by using an svg-file
+that describes the interface elements graphically, and connects to the datapoints using the id-element.
+The format for referencing a datapoint is: iec61850://[IED-IP]:[port]/[LD]/[LN]/[Do]/[Da]
 
-update read values by socketio event from server
-update writes by socketio to server
+elements can be animated using the animate tag.
 
-options: 
-         switch  - read: position, write: open/close, error:true/false
-         measure - read: value, error:true/false
 
-         setting - read: value, write:value, error:true/false
-         button  - write: clickevent, error:true/false
+# getting started:
 
-- python server backend(flask) and pylib61850
+this client needs libiec61850.so installed in /usr/local/lib/libiec61850.so This can be done by doing:
 
-server should list all ied's+ip's from SCL
-when first request comes in, IEC61850 client connection is established, fail: error, succes: store, forward state to webclient
-report/poll is determined by presence of dataset/rcb
-any received data(poll or callback) is forwarded to webclient(s) by socketio
+get  the library
+`$ git clone https://github.com/mz-automation/libiec61850.git`
 
-flask REST:
- - registerElement(ref, type) : wc -> s
- - unregisterElement(ref) : wc -> s
- - writeData(ref, value) : wc -> s
- - readData(ref) : wc -> s
- - updateValue() : s -> wc
+cd into the directory
+`$ cd libiec61850`
 
-process-simulation/fault-simulation
- - source/load values
- - fault location,type
+compile the library
+`$ make`
 
-NOTES:
-libiec61850 needs to be compiled with python bindings, by enabling the option with cmake-gui, or command line; cmake -DBUILD_PYTHON_BINDINGS=ON .
-by default, library will be installed in the active python-path
-and the shared object in /usr/local/lib this path needs to be found by the lib. this can be done in 2 ways (https://stackoverflow.com/questions/17889799/libraries-in-usr-local-lib-not-found)
+install the library
+`$ sudo make install`
 
-export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+cd to the client project dir.
+`$ ../iec61850_open_client`
 
-or 
+also the prerequesites for flask are needed;
 
-edit /etc/ld.so.conf file, by putting the line: /usr/local/lib, sudo ldconfig
+`$ pip3 install -r requirements.txt`
+
+then start the app;
+`python3 app`
+
+and browse to http://127.0.0.1:5000
