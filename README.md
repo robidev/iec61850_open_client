@@ -3,6 +3,8 @@
 This is an open implementation of an IEC 61850 web based client. It uses flask with websockets for the webserver.
 The backend is a python3 based iec61850 client implementation that uses ctypes for the wrapper.
 
+![Alt text](screenshot.png?raw=true "Screenshot of client interface")
+
 The client is configured by using an svg-file; static/mmi.svg
 This file describes the interface elements graphically, and connects to the datapoints using the id-element.
 The format for referencing a datapoint is: iec61850://[IED-IP]:[port]/[LD]/[LN]/[Do]/[Da]. 
