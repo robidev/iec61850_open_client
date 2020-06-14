@@ -749,7 +749,7 @@ class iec61850client():
 
 			error = lib61850.ControlObjectClient_operate(control, ctlVal, 0)
 
-			time.sleep(2)
+			#time.sleep(2)
 			lib61850.MmsValue_delete(ctlVal)		
 		return error
 
@@ -784,7 +784,7 @@ class iec61850client():
 				lib61850.ControlObjectClient_setOrigin(control, "mmi", 3)
 				error = lib61850.ControlObjectClient_selectWithValue(control, ctlVal)
 
-				time.sleep(2)
+				#time.sleep(2)
 				lib61850.MmsValue_delete(ctlVal)
 
 			else:
@@ -904,17 +904,6 @@ if __name__=="__main__":
 	#time.sleep(0.719)
 	#cl.poll()
 	#cl.registerWriteValue("iec61850://127.0.0.1:9102/IED3_SMVMUnn/LLN0.MSVCB01.SvEna",True)
-	error = cl.select("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI1.Pos", "True")
-	if error == 1:
-		print("selected successfully")
-	else:
-		print("failed to select")	
-	#control = None
-	if cl.operate("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI1.Pos", "True") == 1:
-		print("operated successfully")
-	else:
-		print("failed to operate")
-	
 	error = cl.select("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI2.Pos", "True")
 	if error == 1:
 		print("selected successfully")
@@ -922,6 +911,17 @@ if __name__=="__main__":
 		print("failed to select")	
 	#control = None
 	if cl.operate("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI2.Pos", "True") == 1:
+		print("operated successfully")
+	else:
+		print("failed to operate")
+	
+	error = cl.select("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI1.Pos", "True")
+	if error == 1:
+		print("selected successfully")
+	else:
+		print("failed to select")	
+	#control = None
+	if cl.operate("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI1.Pos", "True") == 1:
 		print("operated successfully")
 	else:
 		print("failed to operate")

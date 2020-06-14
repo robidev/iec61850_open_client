@@ -50,8 +50,14 @@ $(document).ready(function() {
 
 
         if( cl == "MEAS"){
-          var desc = el.innerHTML;
-          el.textContent = desc.replace("{value}",value);
+          if(el.dataset.size > 0 || typeof(el.dataset.text) === "undefined"){
+            var desc = el.innerHTML;
+            el.textContent = value;
+          }
+          else{
+            el.textContent = el.dataset.text.replace("{value}",value);
+          }
+
         }
         if(cl == "XCBR" || cl == "XSWI"){
           if(type == 'boolean'){
@@ -59,27 +65,53 @@ $(document).ready(function() {
               if(svgElementData[el.id]['position'] != true) {
                 $("#open",el)[0].beginElement();
                 svgElementData[el.id]['position'] = true;
+
+                var ref = el.id.replace("XCBR1","CSWI1");
+                ref = ref.replace("XSWI2","CSWI2");
+                ref = ref.replace(".stVal","");
+                svgElementData[ref]['position'] = true;
               }
             }
             else{
               if(svgElementData[el.id]['position'] != false){
                 $("#close",el)[0].beginElement();
                 svgElementData[el.id]['position'] = false;
+
+                var ref = el.id.replace("XCBR1","CSWI1");
+                ref = ref.replace("XSWI2","CSWI2");
+                ref = ref.replace(".stVal","");
+                svgElementData[ref]['position'] = false;
               }
             }
           }
           if(type == 'bit-string'){
-            if(value=='1'){
-              if(svgElementData[el.id]['position'] != true) {
-                $("#open",el)[0].beginElement();
-                svgElementData[el.id]['position'] = true;
-              }
-            }
-            else{
-              if(svgElementData[el.id]['position'] != false){
+            if(value == '1'){
+              if(svgElementData[el.id]['position'] != false) {
                 $("#close",el)[0].beginElement();
                 svgElementData[el.id]['position'] = false;
+
+                var ref = el.id.replace("XCBR1","CSWI1");
+                ref = ref.replace("XSWI2","CSWI2");
+                ref = ref.replace(".stVal","");
+                svgElementData[ref]['position'] = false;
               }
+            }
+            else if(value == '2'){
+              if(svgElementData[el.id]['position'] != true){
+                $("#open",el)[0].beginElement();
+                svgElementData[el.id]['position'] = true;
+
+                var ref = el.id.replace("XCBR1","CSWI1");
+                ref = ref.replace("XSWI2","CSWI2");
+                ref = ref.replace(".stVal","");
+                svgElementData[ref]['position'] = true;
+              }
+            }
+            else if(value == '0'){
+              $("#transition",el)[0].beginElement();
+            }
+            else{
+              $("#error",el)[0].beginElement();
             }
           }
         }
@@ -228,7 +260,7 @@ function svg_load(mmi){
       if(cl == "CSWI"){
         //dont register datapoint
         el.onclick = writePosition;
-        svgElementData[el.id]['position'] = false;
+        svgElementData[el.id]['position'] = true;
       }
       if(cl == "MEAS"){
         socket.emit('register_datapoint', {id : el.id, class : cl});
@@ -326,7 +358,7 @@ function writePositionCSWI(event){
   //lazy, TODO properly search for CSWI siblings
   ref = ref.replace("XCBR1","CSWI1");
   ref = ref.replace("XSWI2","CSWI2");
-  ref = ref.replace(".stVal",".Oper.ctlVal");
+  ref = ref.replace(".stVal","");
 
   if(ref in svgElementData && 'position' in svgElementData[ref]){
     if(svgElementData[ref]['position'] == true){

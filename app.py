@@ -66,8 +66,9 @@ def write_value(data):
 
 @socketio.on('write_position', namespace='')
 def write_position(data):
-  logger.debug("write position:" + str(data['id'])  )
-  return client.registerWriteValue(str(data['id']),data['value'])
+  logger.debug("operate:" + str(data['id'])  )
+  return client.operate(str(data['id']),str(data['value']))
+
 
 #synchronous call
 @socketio.on('read_value', namespace='')
