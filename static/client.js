@@ -66,9 +66,11 @@ $(document).ready(function() {
                 $("#open",el)[0].beginElement();
                 svgElementData[el.id]['position'] = true;
 
-                var ref = el.id.replace("XCBR1","CSWI1");
-                ref = ref.replace("XSWI2","CSWI2");
-                ref = ref.replace(".stVal","");
+                var ref = el.id;
+                var sibling = $(el).siblings(".CSWI");//find a CSWI sibling, and operate on that instead
+                if(sibling.length > 0){
+                  ref = sibling[0].id;
+                }
                 svgElementData[ref]['position'] = true;
               }
             }
@@ -77,9 +79,11 @@ $(document).ready(function() {
                 $("#close",el)[0].beginElement();
                 svgElementData[el.id]['position'] = false;
 
-                var ref = el.id.replace("XCBR1","CSWI1");
-                ref = ref.replace("XSWI2","CSWI2");
-                ref = ref.replace(".stVal","");
+                var ref = el.id;
+                var sibling = $(el).siblings(".CSWI");//find a CSWI sibling, and operate on that instead
+                if(sibling.length > 0){
+                  ref = sibling[0].id;
+                }
                 svgElementData[ref]['position'] = false;
               }
             }
@@ -90,9 +94,11 @@ $(document).ready(function() {
                 $("#close",el)[0].beginElement();
                 svgElementData[el.id]['position'] = false;
 
-                var ref = el.id.replace("XCBR1","CSWI1");
-                ref = ref.replace("XSWI2","CSWI2");
-                ref = ref.replace(".stVal","");
+                var ref = el.id;
+                var sibling = $(el).siblings(".CSWI");//find a CSWI sibling, and operate on that instead
+                if(sibling.length > 0){
+                  ref = sibling[0].id;
+                }
                 svgElementData[ref]['position'] = false;
               }
             }
@@ -101,9 +107,11 @@ $(document).ready(function() {
                 $("#open",el)[0].beginElement();
                 svgElementData[el.id]['position'] = true;
 
-                var ref = el.id.replace("XCBR1","CSWI1");
-                ref = ref.replace("XSWI2","CSWI2");
-                ref = ref.replace(".stVal","");
+                var ref = el.id;
+                var sibling = $(el).siblings(".CSWI");//find a CSWI sibling, and operate on that instead
+                if(sibling.length > 0){
+                  ref = sibling[0].id;
+                }
                 svgElementData[ref]['position'] = true;
               }
             }
@@ -298,6 +306,119 @@ function writeValueModel(event){
     alert("cannot write a structure");
     return;
   }
+  writeDialog(refid, ref);
+}
+
+function simulationPoint(event){
+  //generate call to create fault at this line
+  console.log(this.id);
+}
+
+function writePosition(event){
+  ref = this.id;
+  operateDialog(ref);
+}
+
+function writePositionCSWI(event){
+  var ref = this.id;
+
+  var sibling = $(this).siblings(".CSWI");//find a CSWI sibling, and operate on that instead
+  if(sibling.length > 0){
+    ref = sibling[0].id;
+  }
+  operateDialog(ref);
+}
+
+function operateDialog(ref){
+  //read element
+  socket.emit("read_value", {id : ref  }, function(data, err){
+    //read return
+    if(err != 0){
+      alert("could not read element:" + ref + " error:" + err);
+      return;
+    }
+    var ctlModel = data['ctlModel']['value'];
+    var orCat = data['Oper']['origin']['orCat']['value'];
+    var orIdent = data['Oper']['origin']['orIdent']['value'];
+    var ctlVal = false;
+    if(ref in svgElementData && 'position' in svgElementData[ref]){
+      if(svgElementData[ref]['position'] == true){
+        ctlVal = false ;
+      }
+      else{
+        ctlVal =true ;
+      }
+    } 
+    //based on element type, create dialog (type: int, float, text, enum, bool, bitstring)
+    //if ref endswith .Oper/.SBO/.SBOw,.Cancel, provide dialog based on ctlmodel (drop-down for forcing a different model?)
+    content = '<form>';   
+    content += '<div style="" ><b>Element: </b></div><br><div class="controlInput"><i>' + ref + '</i></div><br>'; //+ " : " + JSON.stringify(data);
+
+    content += '<div style=""><label for="ctlVal"><b>CtlVal: (CtlModel: '+ ctlModel +')</b></label></div><br>';
+    content += '<input  class="controlInput" id="ctlVal" type="text" value="'+ctlVal+'"/><br>';
+
+    content += '<div style=""><label for="orCat"><b>orCat:</b></label></div><br>';
+    content += '<input  class="controlInput" id="orCat" type="text" value="'+orCat+'"/><br>';
+    content += '<div style=""><label for="orIdent"><b>orIdent:</b></label></div><br>';
+    content += '<input  class="controlInput" id="orIdent" type="text" value="'+orIdent+'"/><br>';
+    if (ctlModel == 2 || ctlModel == 4){
+      content += '<br><button class="controlBtn" type="submit" id="select">Select</button><br>';
+    }
+
+    content += '<br><button class="controlBtn" type="submit" id="operate">Operate</button><br>';
+
+    if (ctlModel == 2 || ctlModel == 4){
+      content += '<br><button class="controlBtn" type="submit" id="cancel">Cancel</button><br>';
+    }
+    content += '</form>';
+
+    var dialog = new top.PopLayer({ 
+      "title": "Control model", 
+      "content": content
+    });
+
+    dialog.myPop[0].addEventListener('submit', (event) => {
+      event.preventDefault();
+      // check input values
+      var val = event.target['ctlVal'];
+      var action = event.submitter.id;
+      // submit write request
+
+      if(action == 'operate'){
+        socket.emit('operate', { id : ref, value : val.value }, function(err){
+          if(err==1){
+            dialog.destroy();
+          }else{
+            // show error
+            alert("could not operate with error code:"+err);
+          }
+        });
+      }
+      if(action == 'select'){
+        socket.emit('select', { id : ref, value : val.value }, function(err){
+          if(err==1){
+            alert(ref + " selected!");
+          }else{
+            // show error
+            alert("could not select with error code:"+err);
+          }
+        });
+      }
+      if(action == 'cancel'){
+        socket.emit('cancel', { id : ref }, function(err){
+          if(err==1){
+            dialog.destroy();
+          }else{
+            // show error
+            alert("could not cancel with error code:"+err);
+          }
+        });
+      }
+    });
+  });
+}
+
+function writeDialog(refid, ref){
   //read element
   socket.emit("read_value", {id : refid }, function(data, err){
     //read return
@@ -334,40 +455,6 @@ function writeValueModel(event){
       });
     });
   });
-}
-
-function simulationPoint(event){
-  //generate call to create fault at this line
-  console.log(this.id);
-}
-
-function writePosition(event){
-  if(this.id in svgElementData && 'position' in svgElementData[this.id]){
-    if(svgElementData[this.id]['position'] == true){
-      socket.emit('write_position', { id : this.id, value : false });
-    }
-    else{
-      socket.emit('write_position', { id : this.id, value : true });
-    }
-  } 
-}
-
-function writePositionCSWI(event){
-  console.log(event);
-  var ref = this.id;
-  //lazy, TODO properly search for CSWI siblings
-  ref = ref.replace("XCBR1","CSWI1");
-  ref = ref.replace("XSWI2","CSWI2");
-  ref = ref.replace(".stVal","");
-
-  if(ref in svgElementData && 'position' in svgElementData[ref]){
-    if(svgElementData[ref]['position'] == true){
-      socket.emit('write_position', { id : ref, value : false });
-    }
-    else{
-      socket.emit('write_position', { id : ref, value : true });
-    }
-  } 
 }
 
 function draw() {

@@ -217,34 +217,34 @@ class iec61850client():
 
 
 	@staticmethod
-	def getMMsValue(type, value, size=8, typeval = -1):
+	def getMMsValue(typeVal, value, size=8, typeval = -1):
 		#allocate mmsvalue based on type
-		if type == "visible-string" or typeval == lib61850.MMS_VISIBLE_STRING:
+		if typeVal == "visible-string" or typeval == lib61850.MMS_VISIBLE_STRING:
 			return lib61850.MmsValue_newVisibleString(str(value))
-		if type == "boolean" or typeval == lib61850.MMS_BOOLEAN:
-			if value == "True":
+		if typeVal == "boolean" or typeval == lib61850.MMS_BOOLEAN:
+			if (type(value) is str and value.lower() == "true") or (type(value) is bool and value == True):
 				return lib61850.MmsValue_newBoolean(True)
 			else:
 				return lib61850.MmsValue_newBoolean(False)
-		if type == "integer" or typeval == lib61850.MMS_INTEGER:
+		if typeVal == "integer" or typeval == lib61850.MMS_INTEGER:
 			return lib61850.MmsValue_newInteger(int(value))
 		#untested
-		if type == "unsigned" or typeval == lib61850.MMS_UNSIGNED:
+		if typeVal == "unsigned" or typeval == lib61850.MMS_UNSIGNED:
 			return lib61850.MmsValue_newUnsignedFromUint32(int(value))
-		if type == "mms-string" or typeval == lib61850.MMS_STRING:
+		if typeVal == "mms-string" or typeval == lib61850.MMS_STRING:
 			return lib61850.MmsValue_newMmsString(str(value))
-		if type == "float" or typeval == lib61850.MMS_FLOAT:
+		if typeVal == "float" or typeval == lib61850.MMS_FLOAT:
 			return lib61850.MmsValue_newFloat(float(value))
-		if type ==  "binary-time" or typeval == lib61850.MMS_BINARY_TIME:
+		if typeVal ==  "binary-time" or typeval == lib61850.MMS_BINARY_TIME:
 			return lib61850.MmsValue_newBinaryTime(int(value))
-		if type == "bit-string" or typeval == lib61850.MMS_BIT_STRING:
+		if typeVal == "bit-string" or typeval == lib61850.MMS_BIT_STRING:
 			bs = lib61850.MmsValue_newBitString(size)
 			return lib61850.MmsValue_setBitStringFromInteger(bs,int(value))
-		if type == "generalized-time" or typeval == lib61850.MMS_GENERALIZED_TIME:
+		if typeVal == "generalized-time" or typeval == lib61850.MMS_GENERALIZED_TIME:
 			return lib61850.MmsValue_newUtcTimeByMsTime(int(value))
-		if type == "utc-time" or typeval == lib61850.MMS_UTC_TIME:
+		if typeVal == "utc-time" or typeval == lib61850.MMS_UTC_TIME:
 			return lib61850.MmsValue_newUtcTimeByMsTime(int(value))
-		if type == "octet-string" or typeval == lib61850.MMS_OCTET_STRING:
+		if typeVal == "octet-string" or typeval == lib61850.MMS_OCTET_STRING:
 			sl = len(value)
 			sptr = (ctypes.c_char * sl).from_buffer(value)
 
@@ -254,19 +254,19 @@ class iec61850client():
 			ctypes.memmove(buff, sptr, sl)
 			return buf
 		#unsupported types
-		if type == "array" or typeval == lib61850.MMS_ARRAY:
+		if typeVal == "array" or typeval == lib61850.MMS_ARRAY:
 			return None
-		if type ==  "bcd" or typeval == lib61850.MMS_BCD:
+		if typeVal ==  "bcd" or typeval == lib61850.MMS_BCD:
 			return None
-		if type == "access-error" or typeval == lib61850.MMS_DATA_ACCESS_ERROR:
+		if typeVal == "access-error" or typeval == lib61850.MMS_DATA_ACCESS_ERROR:
 			return None
-		if type == "oid" or typeval == lib61850.MMS_OBJ_ID:
+		if typeVal == "oid" or typeval == lib61850.MMS_OBJ_ID:
 			return None
-		if type == "structure" or typeval == lib61850.MMS_STRUCTURE:
+		if typeVal == "structure" or typeval == lib61850.MMS_STRUCTURE:
 			return  None
-		if type == "unknown(error)":
+		if typeVal == "unknown(error)":
 			return None
-		logger.error("Mms value type %s not supported" % type)
+		logger.error("Mms value type %s not supported" % typeVal)
 		return None
 
 
@@ -748,8 +748,8 @@ class iec61850client():
 			ctlVal = iec61850client.getMMsValue("",value,0,mmsType)
 
 			error = lib61850.ControlObjectClient_operate(control, ctlVal, 0)
-
-			#time.sleep(2)
+			logger.error("conrol returned:%i, %s" % (error, value))
+			time.sleep(2)
 			lib61850.MmsValue_delete(ctlVal)		
 		return error
 

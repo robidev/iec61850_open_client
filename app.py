@@ -69,6 +69,20 @@ def write_position(data):
   logger.debug("operate:" + str(data['id'])  )
   return client.operate(str(data['id']),str(data['value']))
 
+@socketio.on('operate', namespace='')
+def operate(data):
+  logger.debug("operate:" + str(data['id']) + " v:" + str(data['value'])  )
+  return client.operate(str(data['id']),str(data['value']))
+
+@socketio.on('select', namespace='')
+def select(data):
+  logger.debug("select:" + str(data['id'])  )
+  return client.select(str(data['id']),str(data['value']))
+
+@socketio.on('cancel', namespace='')
+def cancel(data):
+  logger.debug("cancel:" + str(data['id'])  )
+  return client.cancel(str(data['id']))
 
 #synchronous call
 @socketio.on('read_value', namespace='')
