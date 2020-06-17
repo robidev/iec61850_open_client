@@ -320,9 +320,10 @@ function writePosition(event){
 }
 
 function writePositionCSWI(event){
+  //find a CSWI sibling, and operate on that instead
   var ref = this.id;
 
-  var sibling = $(this).siblings(".CSWI");//find a CSWI sibling, and operate on that instead
+  var sibling = $(this).siblings(".CSWI");
   if(sibling.length > 0){
     ref = sibling[0].id;
   }
@@ -349,8 +350,8 @@ function operateDialog(ref){
         ctlVal =true ;
       }
     } 
-    //based on element type, create dialog (type: int, float, text, enum, bool, bitstring)
-    //if ref endswith .Oper/.SBO/.SBOw,.Cancel, provide dialog based on ctlmodel (drop-down for forcing a different model?)
+    //based on element type, create dialog (type: int, float, enum, bool?)
+    //(drop-down for forcing a different ctlmodel?)
     content = '<form>';   
     content += '<div style="" ><b>Element: </b></div><br><div class="controlInput"><i>' + ref + '</i></div><br>'; //+ " : " + JSON.stringify(data);
 

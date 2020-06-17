@@ -45,54 +45,20 @@ def index():
   return render_template('index.html', async_mode=socketio.async_mode)
 
 
-# Socket events
+# web UI: event when client connects
+@socketio.on('connect', namespace='')
+def test_connect():
+  global thread
+  if thread is None:
+    thread = socketio.start_background_task(target=worker)
+
+# web UI: refresh page
 @socketio.on('get_page_data', namespace='')
 def get_page_data(data):
   emit('page_reload', {'data': ""})
 
 
-@socketio.on('register_datapoint', namespace='')
-def register_datapoint(data):
-  global client
-  logger.debug("register datapoint:" + str(data) )
-  client.registerReadValue(str(data['id']))
-
-
-@socketio.on('write_value', namespace='')
-def write_value(data):
-  global client
-  logger.debug("write value:" + str(data['value']) + ", element:" + str(data['id']) )
-  return client.registerWriteValue(str(data['id']),str(data['value']))
-
-@socketio.on('write_position', namespace='')
-def write_position(data):
-  logger.debug("operate:" + str(data['id'])  )
-  return client.operate(str(data['id']),str(data['value']))
-
-@socketio.on('operate', namespace='')
-def operate(data):
-  logger.debug("operate:" + str(data['id']) + " v:" + str(data['value'])  )
-  return client.operate(str(data['id']),str(data['value']))
-
-@socketio.on('select', namespace='')
-def select(data):
-  logger.debug("select:" + str(data['id'])  )
-  return client.select(str(data['id']),str(data['value']))
-
-@socketio.on('cancel', namespace='')
-def cancel(data):
-  logger.debug("cancel:" + str(data['id'])  )
-  return client.cancel(str(data['id']))
-
-#synchronous call
-@socketio.on('read_value', namespace='')
-def read_value(data):
-  logger.debug("read value:" + str(data['id'])  )
-  return client.ReadValue(data['id'])
-
-
-
-  
+# web UI: set focus
 @socketio.on('set_focus', namespace='')
 def set_focus(data):
   global focus
@@ -106,13 +72,70 @@ def set_focus(data):
   emit('select_tab_event', {'host_name': focus})
   
 
-@socketio.on('connect', namespace='')
-def test_connect():
-  global thread
-  if thread is None:
-    thread = socketio.start_background_task(target=worker)
+# Simulation interface
+# Retrieve available simulation parameters and values
+# type: IFL a,b,c - phase, freq, vss
+# type: LOAD a,b,c - r
+# type: FAULT a,b,c - r-ok, r-fault, start-time, end-time
+
+# write simulation parameters
+#elem, val
+
+# start/stop simulation
+
+# read global simulation parameters->load .trans section
+# write global simulation parameters->write .trans section
+
+# FEATURE: load comtrade (need mapping to CTR/VTR elements)
 
 
+
+# IEC61850 client interface
+
+
+#synchronous read call, returns dict with sub-elements
+@socketio.on('read_value', namespace='')
+def read_value(data):
+  logger.debug("read value:" + str(data['id'])  )
+  return client.ReadValue(data['id'])
+
+
+# write call, only supports DA elements
+@socketio.on('write_value', namespace='')
+def write_value(data):
+  global client
+  logger.debug("write value:" + str(data['value']) + ", element:" + str(data['id']) )
+  return client.registerWriteValue(str(data['id']),str(data['value']))
+
+
+# control model, only supports control object ref. e.g. LogicalDevice/CSWI.Pos
+@socketio.on('operate', namespace='')
+def operate(data):
+  logger.debug("operate:" + str(data['id']) + " v:" + str(data['value'])  )
+  return client.operate(str(data['id']),str(data['value']))
+
+#supports both SBO and SBOw
+@socketio.on('select', namespace='')
+def select(data):
+  logger.debug("select:" + str(data['id'])  )
+  return client.select(str(data['id']),str(data['value']))
+
+#cancel selection
+@socketio.on('cancel', namespace='')
+def cancel(data):
+  logger.debug("cancel:" + str(data['id'])  )
+  return client.cancel(str(data['id']))
+
+
+# register datapoint for polling/reporting
+@socketio.on('register_datapoint', namespace='')
+def register_datapoint(data):
+  global client
+  logger.debug("register datapoint:" + str(data) )
+  client.registerReadValue(str(data['id']))
+
+
+# web UI: load datamodels for registered IED's
 @socketio.on('register_datapoint_finished', namespace='')
 def register_datapoint_finished(data):
   #return #there is a bug here, so disable for now
@@ -135,9 +158,16 @@ def register_datapoint_finished(data):
     process_info_event(loaded_json)
 
 
+# callbacks from libiec61850client
+# called by client.poll
+def readvaluecallback(key,data):
+  logger.debug("callback: %s - %s" % (key,data))
+  socketio.emit("svg_value_update_event",{ 'element' : key, 'data' : data })
 
-#worker subroutines
-def process_info_event(loaded_json): #add info to the ied datamodel tab
+# worker subroutines
+
+#add info to the ied datamodel tab
+def process_info_event(loaded_json): 
   global focus
   global hosts_info
   ihost = loaded_json['host']
@@ -156,7 +186,7 @@ def process_info_event(loaded_json): #add info to the ied datamodel tab
   if ihost==focus:
     socketio.emit('info_event', idata)
 
-
+# print datamodel in table
 def printItems(dictObjs):
   dictObj = dictObjs['data']
   el = 'Last update: '+str(time.strftime("%a, %d %b %Y %H:%M:%S",time.localtime(dictObjs['last'])))+'<br><br>'
@@ -221,8 +251,6 @@ def worker():
       tupl = key.split(':')
       hostname = tupl[0]
 
-      #socketio.emit('log_event', {'host':key,'data':'[+] updating IED info','clear':0})
-
       port = None
       if len(tupl) > 1 and tupl[1] != "":
         port = int(tupl[1])
@@ -234,13 +262,6 @@ def worker():
       process_info_event(loaded_json)
 
 
-# callback from libiec61850client
-# called by client.poll
-def readvaluecallback(key,data):
-  logger.debug("callback: %s - %s" % (key,data))
-  socketio.emit("svg_value_update_event",{ 'element' : key, 'data' : data })
-
-
 if __name__ == '__main__':
   logger = logging.getLogger('webserver')
   logging.basicConfig(format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
@@ -250,8 +271,3 @@ if __name__ == '__main__':
   client = libiec61850client.iec61850client(readvaluecallback, logger)
   socketio.run(app)
 
-"""
-
-simulation... not sure.. special handling?
-
-"""
