@@ -249,7 +249,7 @@ function svg_load(mmi){
   var svgDoc = mmi.contentDocument; //get the inner DOM of mmi.svg
   svgRoot  = svgDoc.documentElement;
   svgElementData = {};
-
+  simhosts = {};
   //register for all values in loaded svg
   $("g",svgRoot).find("*").each(function(idx, el){
     //console.log("id:" + el.id );
@@ -276,6 +276,9 @@ function svg_load(mmi){
     }
     //elements that can be modified by the simulation
     if(el.id.startsWith("simulation://") == true){
+      var url = el.id.replace("simulation://","");
+      var host = url.split('/')[0];
+      simhosts[host] = 1;
       if(cl == "LINE"){
         el.onclick = simulationPoint;
       }
@@ -285,11 +288,156 @@ function svg_load(mmi){
       if(cl == "LOAD"){
         el.onclick = writeValue;
       }
+      if(cl == "START"){
+        el.onclick = startSim;
+      }
+      if(cl == "SETTINGS"){
+        el.onclick = settingsSim;
+      }
+      if(cl == "NODES"){
+        el.onclick = nodesSim;
+      }
     }
-  })
+  });
+
+  for(var hostp in simhosts) {
+    var xmlHttp = new XMLHttpRequest();
+    xmlHttp.onreadystatechange = function() { 
+        if (xmlHttp.readyState == 4 && xmlHttp.status == 200)
+        console.log("init: " + xmlHttp.responseText);
+    }
+    xmlHttp.open("GET", "http://" + hostp + "/init", true); // true for asynchronous 
+    xmlHttp.send(null);
+  }
+
   socket.emit('register_datapoint_finished', '');
   // connect functions for reading/writing values and generating faults, that can socket.emit
 }
+
+function startSim(event){
+  event.preventDefault();
+  console.log("called: " + this.id);
+
+  var url = this.id.replace("simulation://","http://");
+  var xmlHttp = new XMLHttpRequest();
+  xmlHttp.m = this.id;
+  xmlHttp.onreadystatechange = function() { 
+    if (xmlHttp.readyState == 4 && xmlHttp.status == 200){
+      console.log(xmlHttp.responseText);
+      console.log("start id: " + xmlHttp.m);
+      
+      var j = JSON.parse(xmlHttp.responseText);
+      if('run' in j){
+        var rect = $("#" + $.escapeSelector(xmlHttp.m),svgRoot).children("rect")[0];
+        if(j.run === "started"){
+          $(rect).attr('style', "fill:#FF0000");
+        }else{
+          $(rect).attr('style', "fill:#000000");
+        }
+      }
+    }
+  }
+  xmlHttp.open("GET", url, true); // true for asynchronous 
+  xmlHttp.send(null);
+}
+
+function settingsSim(event){
+  event.preventDefault();
+
+  var url = this.id.replace("simulation://","http://");
+  var xmlHttp = new XMLHttpRequest();
+  xmlHttp.m = this.id;
+  xmlHttp.onreadystatechange = function() { 
+    if (xmlHttp.readyState == 4 && xmlHttp.status == 200){
+      
+      var j = JSON.parse(xmlHttp.responseText);
+      if('settings' in j){
+        alert("could not retrieve settings");
+        return;
+      }
+
+      content = '<form>';
+      content += '<div style=""><label for="title"><b>Title:</b></label></div><br>';
+      content += '<input  class="controlInput" id="title" type="text" value="'+j.title+'"/><br>';
+      content += '<div style=""><label for="options"><b>Options:</b></label></div><br>';
+      content += '<input  class="controlInput" id="options" type="text" value="'+j.options+'"/><br>';
+      content += '<div style=""><label for="tran"><b>Tran:</b></label></div><br>';
+      content += '<input  class="controlInput" id="tran" type="text" value="'+j.tran+'"/><br>';
+            
+      content += '<br><button class="controlBtn" type="submit" id="save">save</button><button class="controlBtn" type="submit" id="cancel">cancel</button><br>';
+      content += '</form>';
+
+      var dialog = new top.PopLayer({ 
+        "title": "Settings", 
+        "content": content
+      });
+  
+      dialog.myPop[0].addEventListener('submit', (event) => {
+        event.preventDefault();
+        var action = event.submitter.id;
+
+        if(action == 'save'){
+          var data = new FormData();
+          data.append('title', event.target['title'].value);
+          data.append('options', event.target['options'].value);
+          data.append('tran', event.target['tran'].value);
+
+          var xmlHttp = new XMLHttpRequest();
+          xmlHttp.onreadystatechange = function() { 
+            if (xmlHttp.readyState == 4 && xmlHttp.status == 200){            
+              var j = JSON.parse(xmlHttp.responseText);
+              if('settings' in j){
+                alert("could not write settings");
+              }
+            }
+          }
+          xmlHttp.open("POST", url, true); // true for asynchronous 
+          xmlHttp.send(data);
+          dialog.destroy();
+        }
+        if(action == 'cancel'){
+          dialog.destroy();
+        }
+      })
+    }
+  }
+  xmlHttp.open("GET", url, true); // true for asynchronous 
+  xmlHttp.send(null);
+}
+
+
+function nodesSim(event){
+  event.preventDefault();
+  console.log("called: " + this.id);
+
+  var url = this.id.replace("simulation://","http://");
+  var xmlHttp = new XMLHttpRequest();
+  xmlHttp.m = this.id;
+  xmlHttp.onreadystatechange = function() { 
+    if (xmlHttp.readyState == 4 && xmlHttp.status == 200){
+      console.log("node id: " + xmlHttp.m);
+      var nodes = [];
+      var j = JSON.parse(xmlHttp.responseText);
+      for (var node in j) {
+        var type = j[node].type;
+        var device = j[node].device;
+        nodes.push(node);
+        if(type == "IFL"){
+
+        }
+        if(type == "LOAD"){
+
+        }
+        if(type == "FAULT"){
+
+        }
+      }
+    }
+  }
+  xmlHttp.open("GET", url, true); // true for asynchronous 
+  xmlHttp.send(null);
+}
+
 
 function writeValue(event){
   alert('write a value');

@@ -4,8 +4,20 @@
   <rect fill="#000000" id="canvas_background" height="512" width="552" y="0" x="0"/>
  </g>
  <g>
+  <a id="simulation://127.0.0.1:5010/play_simulation" class="START" href="#" >
+    <rect id="a1"  class="" stroke="#ffffff" y="10" x="2" height="24" width="164" fill="#000000" stroke-width="1.5"/> 
+    <text id="a2"  class="" stroke="#ffffff" y="26" x="6" xml:space="preserve" text-anchor="left" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#ffffff">play/pause simulation</text>
+  </a>
+  <a id="simulation://127.0.0.1:5010/simulation_settings" class="SETTINGS" href="#" >
+    <rect id="b1"  class="" stroke="#ffffff" y="50" x="2" height="24" width="164" fill="#000000" stroke-width="1.5"/> 
+    <text id="b2"  class="" stroke="#ffffff" y="66" x="6" xml:space="preserve" text-anchor="left" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#ffffff">simulation settings</text>
+  </a>
+  <a id="simulation://127.0.0.1:5010/simulation_nodes" class="NODES" href="#" >
+    <rect id="c1"  class="" stroke="#ffffff" y="90" x="2" height="24" width="164" fill="#000000" stroke-width="1.5"/> 
+    <text id="c2"  class="" stroke="#ffffff" y="106" x="6" xml:space="preserve" text-anchor="left" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#ffffff">edit nodes</text>
+  </a>
   <title>Layer 1</title>
-  <text id="simulation://127.0.0.1/IFL"                             class="IFL" stroke="#ffffff" xml:space="preserve" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="24" y="80" x="266" fill="#ffffff">220KV Feed</text>
+  <text id="simulation://127.0.0.1:5010/IFL"                             class="IFL" stroke="#ffffff" xml:space="preserve" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="24" y="80" x="266" fill="#ffffff">220KV Feed</text>
   <ellipse id="svg_top" stroke="#ffffff" ry="2.424242" rx="2.121212" cy="91.858974" cx="266" fill-opacity="null" stroke-width="1.5" fill="none"/>
 
   <g id="S12/D1/Q1/I1">
@@ -13,7 +25,7 @@
     <text id="iec61850://127.0.0.1:9102/IED3_SMVMUnn/MMXU1.AvAPhs.mag.f" class="MEAS" data-text="Current: {value} A" fill="#ffffff" stroke="#ffffff" x="291.851085" y="125.166792" font-size="12" font-family="Helvetica, Arial, sans-serif" text-anchor="start" xml:space="preserve" font-weight="normal" font-style="normal">current: {value} A</text>
   </g>
 
-  <line id="simulation://127.0.0.1/S12/D1/Q1/L1"                    class="LINE" stroke-linecap="undefined" stroke-linejoin="undefined" y2="153.934719" x2="266" y1="93.434721" x1="266" stroke-width="1.5" stroke="#ffffff" fill="none"/>
+  <line id="simulation://127.0.0.1:5010/S12/D1/Q1/L1"                    class="LINE" stroke-linecap="undefined" stroke-linejoin="undefined" y2="153.934719" x2="266" y1="93.434721" x1="266" stroke-width="1.5" stroke="#ffffff" fill="none"/>
 
   <g id="S12/D1/T1">
     <title>PTR</title>
@@ -22,7 +34,7 @@
     <ellipse id="svg_T1_b" ry="18" rx="18" cy="196.290907" cx="266" fill-opacity="null" stroke-width="1.5" stroke="#ffffff" fill="none"/>
   </g>
  
-  <line id="simulation://127.0.0.1/S12/E1/Q1/L2"                    class="LINE" stroke="#ffffff" stroke-linecap="undefined" stroke-linejoin="undefined" y2="256.43483" x2="266" y1="214.934859" x1="266" stroke-width="1.5" fill="none"/>
+  <line id="simulation://127.0.0.1:5010/S12/E1/Q1/L2"                    class="LINE" stroke="#ffffff" stroke-linecap="undefined" stroke-linejoin="undefined" y2="256.43483" x2="266" y1="214.934859" x1="266" stroke-width="1.5" fill="none"/>
 
   <g id="S12/E1/Q1/I1">
     <title>CTR</title>
@@ -45,7 +57,7 @@
     <rect id="iec61850://127.0.0.1:7102/IED1_XCBRGenericIO/CSWI1.Pos"     class="CSWI" height="22.553162" width="19.999974" y="257.946454" x="256.364398" stroke-width="1.5" stroke="none" fill="none"/>
   </g>
 
-  <line id="simulation://127.0.0.1/S12/E1/Q1/L1"                    class="LINE" stroke="#ffffff" stroke-linecap="undefined" stroke-linejoin="undefined" y2="300.359068" x2="266" y1="281.359068" x1="266" stroke-width="1.5" fill="none"/>
+  <line id="simulation://127.0.0.1:5010/S12/E1/Q1/L1"                    class="LINE" stroke="#ffffff" stroke-linecap="undefined" stroke-linejoin="undefined" y2="300.359068" x2="266" y1="281.359068" x1="266" stroke-width="1.5" fill="none"/>
 
   <g id="S12/E1/Q1/QB1">
     <title>SWI</title>
@@ -59,8 +71,8 @@
     </line>
   </g>
 
-  <line id="simulation://127.0.0.1/S12/E1/W1/BB1"                   class="LINE" stroke="#ffffff" stroke-linecap="undefined" stroke-linejoin="undefined" y2="360" x2="266" y1="320.436511" x1="266" stroke-width="1.5" fill="none"/>
+  <line id="simulation://127.0.0.1:5010/S12/E1/W1/BB1"                   class="LINE" stroke="#ffffff" stroke-linecap="undefined" stroke-linejoin="undefined" y2="360" x2="266" y1="320.436511" x1="266" stroke-width="1.5" fill="none"/>
 
-  <text id="simulation://127.0.0.1/LOAD"                            class="LOAD" stroke="#ffffff"  xml:space="preserve" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="24" y="380" x="266" fill="#ffffff">Load</text>
+  <text id="simulation://127.0.0.1:5010/LOAD"                            class="LOAD" stroke="#ffffff"  xml:space="preserve" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="24" y="380" x="266" fill="#ffffff">Load</text>
  </g>
 </svg>
