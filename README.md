@@ -27,11 +27,12 @@ cd into the directory
 
 compile the library
 
-`$ make`
+`$ make dynlib`
 
-install the library
+install the library in the right place for the ctypes wrapper 
+(you can modify this in lib61850.py if you prefer a different location)
 
-`$ sudo make install`
+`$ sudo cp build/libiec61850.so /usr/local/lib/`
 
 cd to the client project dir.
 
