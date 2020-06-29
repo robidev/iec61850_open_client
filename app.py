@@ -268,5 +268,5 @@ if __name__ == '__main__':
 	# note the `logger` from above is now properly configured
   logger.debug("started")
   client = libiec61850client.iec61850client(readvaluecallback, logger)
-  socketio.run(app)
+  socketio.run(app,host="0.0.0.0")
 
