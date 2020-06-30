@@ -30,7 +30,11 @@ if (typeof jQuery == 'undefined') {
     <h2 class='h2 teal'>HMI</h2>	
     <div class='content'>
       <div id="network" class="network">
-        <object data="static/mmi.svg" type="image/svg+xml" id="mmi_svg" width="100%" height="100%"></object>
+	{% if local_svg %}
+        <object data="static/mmi.local.svg" type="image/svg+xml" id="mmi_svg" width="100%" height="100%"></object>
+	{% else %}
+        <object data="static/mmi.remote.svg" type="image/svg+xml" id="mmi_svg" width="100%" height="100%"></object>
+	{% endif %}
       </div>
     </div>	
   </div>

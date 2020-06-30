@@ -7,7 +7,7 @@ import socket
 import json
 import subprocess
 import time
-#import yaml
+import sys
 import os
 import logging
 
@@ -20,6 +20,7 @@ focus = ''
 hosts_info = {}
 reset_log = False
 async_mode = None
+local_svg = True
 
 #webserver
 app = Flask(__name__, template_folder='templates', static_folder='static')
@@ -40,8 +41,9 @@ class socketHandler(logging.StreamHandler):
 @app.route('/', methods = ['GET'])
 def index():
   global reset_log
+  global local_svg
   reset_log = True
-  return render_template('index.html', async_mode=socketio.async_mode)
+  return render_template('index.html', local_svg=local_svg, async_mode=socketio.async_mode)
 
 
 # web UI: event when client connects
@@ -266,6 +268,10 @@ if __name__ == '__main__':
   logging.basicConfig(format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
     level=logging.INFO)
 	# note the `logger` from above is now properly configured
+
+  if len(sys.argv) > 1 and sys.argv[1] == "-nD": #use different svg for debug
+  	local_svg = False
+
   logger.debug("started")
   client = libiec61850client.iec61850client(readvaluecallback, logger)
   socketio.run(app,host="0.0.0.0")

@@ -14,7 +14,8 @@ RUN git clone https://github.com/mz-automation/libiec61850.git /tmp/libiec61850
 RUN cd /tmp/libiec61850 && make dynlib \
 	&& cp build/libiec61850.so /usr/local/lib/
 
-RUN git clone https://github.com/robidev/iec61850_open_client.git /srv/iec61850_open_client
+#RUN git clone https://github.com/robidev/iec61850_open_client.git /srv/iec61850_open_client
+COPY . /srv/iec61850_open_client
 
 RUN cd /srv/iec61850_open_client && pip3 install -r requirements.txt
 
@@ -22,5 +23,5 @@ WORKDIR /srv/iec61850_open_client
 
 EXPOSE 5000
 
-CMD ["python3","app.py"]
+CMD ["python3","app.py","-nD"]
 
