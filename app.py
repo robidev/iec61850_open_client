@@ -244,7 +244,7 @@ def worker():
 
     socketio.sleep(1)
     client.poll()
-    logger.info("values polled")
+    logger.debug("values polled")
 
     # updating datamodel values
     ieds = client.getRegisteredIEDs()

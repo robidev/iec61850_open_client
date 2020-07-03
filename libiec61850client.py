@@ -175,7 +175,7 @@ class iec61850client():
 						DSname = ctypes.cast(lib61850.LinkedList_getData(LNds),ctypes.c_char_p).value.decode("utf-8")
 						tmodel[LD_name][LN_name][DSname] = {}
 
-						#cannot pass the right type to isDeletable(last arg).. keeps complaining about 'bool *', and isDel = ctypes.pointer(ctypes.c_bool(False)) does not work
+						#
 						isDel = ctypes.c_bool(False)
 						dataSetMembers = lib61850.IedConnection_getDataSetDirectory(con, ctypes.byref(error), LD_name+"/"+LN_name+"."+DSname, ctypes.byref(isDel))  
 						if error.value != 0:#ret becomes int if connection is lost
@@ -186,9 +186,9 @@ class iec61850client():
 
 						#all DS are assumed not deletable 
 						if isDel == True:
-							logger.error("  DS: %s, not Deletable" % DSname)
-						else:
 							logger.error("  DS: %s, is Deletable" % DSname)
+						else:
+							logger.error("  DS: %s, not Deletable" % DSname)
 						dataSetMemberRef = lib61850.LinkedList_getNext(dataSetMembers)
 
 						i = 0

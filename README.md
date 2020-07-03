@@ -12,8 +12,11 @@ class defines are used to indicate how the tag should be interacted with. MEAS i
 
 elements can be animated using the animate tag.
 
+# getting started(docker):
 
-# getting started:
+`$ sudo docker build -f Dockerfile.libiec61850_client --tag client .`
+
+# getting started(localhost):
 
 this client needs libiec61850.so installed in /usr/local/lib/libiec61850.so This can be done by doing:
 
