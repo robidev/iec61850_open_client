@@ -16,6 +16,10 @@ elements can be animated using the animate tag.
 
 `$ sudo docker build -f Dockerfile.libiec61850_client --tag client .`
 
+and browse to 
+
+http://127.0.0.1:5000
+
 # getting started(localhost):
 
 this client needs libiec61850.so installed in /usr/local/lib/libiec61850.so This can be done by doing:
