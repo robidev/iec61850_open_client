@@ -14,7 +14,13 @@ elements can be animated using the animate tag.
 
 # getting started(docker):
 
+build the container
+
 `$ sudo docker build -f Dockerfile.libiec61850_client --tag client .`
+
+run the container
+
+`$ sudo docker run --rm -p 5000:5000 client`
 
 and browse to 
 
