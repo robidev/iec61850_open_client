@@ -15,9 +15,12 @@ RUN cd /tmp/libiec61850 && make dynlib \
 	&& cp build/libiec61850.so /usr/local/lib/
 
 #RUN git clone https://github.com/robidev/iec61850_open_client.git /srv/iec61850_open_client
-COPY . /srv/iec61850_open_client
+
+COPY ./requirements.txt /srv/iec61850_open_client/requirements.txt
 
 RUN cd /srv/iec61850_open_client && pip3 install -r requirements.txt
+
+COPY . /srv/iec61850_open_client
 
 WORKDIR /srv/iec61850_open_client
 
