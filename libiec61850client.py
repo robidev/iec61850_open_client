@@ -207,6 +207,45 @@ class iec61850client():
 						LNds = lib61850.LinkedList_getNext(LNds)
 
 					lib61850.LinkedList_destroy(LNdss)
+
+
+					LNrpp = lib61850.IedConnection_getLogicalNodeDirectory(con, ctypes.byref(error), LD_name+"/"+LN_name, lib61850.ACSI_CLASS_URCB)
+					if error.value != 0:#ret becomes int if connection is lost
+						lib61850.LinkedList_destroy(logicalNodes)
+						lib61850.LinkedList_destroy(deviceList)
+						return tmodel
+
+					LNrp = lib61850.LinkedList_getNext(LNrpp)
+					while LNrp:
+						Rp = ctypes.cast(lib61850.LinkedList_getData(LNrp),ctypes.c_char_p).value.decode("utf-8")
+						tmodel[LD_name][LN_name][Rp] = {}
+
+						doRef = LD_name+"/"+LN_name+"."+Rp
+
+						tmodel[LD_name][LN_name][Rp] = iec61850client.printDataDirectory(con, doRef)
+
+						LNrp = lib61850.LinkedList_getNext(LNrp)
+					lib61850.LinkedList_destroy(LNrpp)
+
+
+					LNbrr = lib61850.IedConnection_getLogicalNodeDirectory(con, ctypes.byref(error), LD_name+"/"+LN_name, lib61850.ACSI_CLASS_BRCB)
+					if error.value != 0:#ret becomes int if connection is lost
+						lib61850.LinkedList_destroy(logicalNodes)
+						lib61850.LinkedList_destroy(deviceList)
+						return tmodel
+
+					LNbr = lib61850.LinkedList_getNext(LNbrr)
+					while LNbr:
+						Br = ctypes.cast(lib61850.LinkedList_getData(LNbr),ctypes.c_char_p).value.decode("utf-8")
+						tmodel[LD_name][LN_name][Br] = {}
+
+						doRef = LD_name+"/"+LN_name+"."+Br
+
+						tmodel[LD_name][LN_name][Br] = iec61850client.printDataDirectory(con, doRef)
+
+						LNbr = lib61850.LinkedList_getNext(LNbr)
+					lib61850.LinkedList_destroy(LNbrr)
+
 					logicalNode = lib61850.LinkedList_getNext(logicalNode)
 
 				lib61850.LinkedList_destroy(logicalNodes)
