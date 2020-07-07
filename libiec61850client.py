@@ -748,7 +748,7 @@ class iec61850client():
 			ctlVal = iec61850client.getMMsValue("",value,0,mmsType)
 
 			error = lib61850.ControlObjectClient_operate(control, ctlVal, 0)
-			logger.error("conrol returned:%i, %s" % (error, value))
+			logger.debug("conrol returned:%i, %s" % (error, value))
 			time.sleep(2)
 			lib61850.MmsValue_delete(ctlVal)		
 		return error
