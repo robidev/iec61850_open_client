@@ -21,6 +21,7 @@ hosts_info = {}
 reset_log = False
 async_mode = None
 local_svg = True
+async_msg = []
 
 #webserver
 app = Flask(__name__, template_folder='templates', static_folder='static')
@@ -106,7 +107,13 @@ def read_value(data):
 def write_value(data):
   global client
   logger.debug("write value:" + str(data['value']) + ", element:" + str(data['id']) )
-  return client.registerWriteValue(str(data['id']),str(data['value']))
+  retValue = client.registerWriteValue(str(data['id']),str(data['value']))
+  if retValue > 0:
+    return retValue, libiec61850client.IedClientError(retValue).name
+  if retValue == 0:
+    return retValue, "no error"
+  return retValue, "general error"
+
 
 
 # control model, only supports control object ref. e.g. LogicalDevice/CSWI.Pos
@@ -165,6 +172,9 @@ def readvaluecallback(key,data):
   logger.debug("callback: %s - %s" % (key,data))
   socketio.emit("svg_value_update_event",{ 'element' : key, 'data' : data })
 
+
+def cmdTerm_cb(msg):
+  async_msg.append(msg)
 # worker subroutines
 
 #add info to the ied datamodel tab
@@ -225,11 +235,11 @@ def worker():
   global client
   socketio.sleep(tick)
 
-  sh = socketHandler(socketio)
-  sh.setLevel(logging.DEBUG)
-  fm = logging.Formatter('%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
-  sh.setFormatter(fm)
-  logger.addHandler(sh)
+  #sh = socketHandler(socketio)
+  #sh.setLevel(logging.INFO)
+  #fm = logging.Formatter('%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
+  #sh.setFormatter(fm)
+  #logger.addHandler(sh)
 
   logger.info("worker treat started")
 
@@ -262,17 +272,27 @@ def worker():
       loaded_json['data'] = model
       process_info_event(loaded_json)
 
+      while len(async_msg) > 0:
+        logger.info(async_msg.pop(0))
+
 
 if __name__ == '__main__':
   logger = logging.getLogger('webserver')
   logging.basicConfig(format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
     level=logging.INFO)
+
+  shm = socketHandler(socketio)
+  shm.setLevel(logging.INFO)
+  fmm = logging.Formatter('%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
+  shm.setFormatter(fmm)
+  logger.addHandler(shm)
+
 	# note the `logger` from above is now properly configured
 
   if len(sys.argv) > 1 and sys.argv[1] == "-nD": #use different svg for debug
   	local_svg = False
 
-  logger.debug("started")
-  client = libiec61850client.iec61850client(readvaluecallback, logger)
+  logger.info("started")
+  client = libiec61850client.iec61850client(readvaluecallback, logger, cmdTerm_cb)
   socketio.run(app,host="0.0.0.0")
 

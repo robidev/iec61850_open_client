@@ -7,16 +7,109 @@ import lib61850
 import logging
 
 from urllib.parse import urlparse
+from enum import Enum
+
+class AddCause(Enum):
+	ADD_CAUSE_UNKNOWN = 0
+	ADD_CAUSE_NOT_SUPPORTED = 1
+	ADD_CAUSE_BLOCKED_BY_SWITCHING_HIERARCHY = 2	# ot successful since one of the downstream Loc switches like in CSWI has the value TRUE
+	ADD_CAUSE_SELECT_FAILED = 3 					# e.g. wrong ctlnum, or reserved by second client?
+	ADD_CAUSE_INVALID_POSITION = 4					# cmdterm -
+	ADD_CAUSE_POSITION_REACHED = 5					# if element was there allready
+	ADD_CAUSE_PARAMETER_CHANGE_IN_EXECUTION = 6		# Control action is blocked due to running parameter change.
+	ADD_CAUSE_STEP_LIMIT = 7						# tapchanger end pos
+	ADD_CAUSE_BLOCKED_BY_MODE = 8					# if mod is set to local
+	ADD_CAUSE_BLOCKED_BY_PROCESS = 9				# e.g. blocked by eehealth
+	ADD_CAUSE_BLOCKED_BY_INTERLOCKING = 10			# blocked by interlocking
+	ADD_CAUSE_BLOCKED_BY_SYNCHROCHECK = 11			# blocked by synchrocheck
+	ADD_CAUSE_COMMAND_ALREADY_IN_EXECUTION = 12		# operate is ongoing
+	ADD_CAUSE_BLOCKED_BY_HEALTH = 13				# blocked by health 
+	ADD_CAUSE_1_OF_N_CONTROL = 14					# blocked by any of the relevant controls(stSeld of another related CSWI)
+	ADD_CAUSE_ABORTION_BY_CANCEL = 15				# action is cancelled
+	ADD_CAUSE_TIME_LIMIT_OVER = 16					# switch did not reach in time
+	ADD_CAUSE_ABORTION_BY_TRIP = 17					# overridden control by trip
+	ADD_CAUSE_OBJECT_NOT_SELECTED = 18				# not selected
+	ADD_CAUSE_OBJECT_ALREADY_SELECTED = 19			# we had it allready
+	ADD_CAUSE_NO_ACCESS_AUTHORITY = 20				# ...
+	ADD_CAUSE_ENDED_WITH_OVERSHOOT = 21				# end position overshot
+	ADD_CAUSE_ABORTION_DUE_TO_DEVIATION = 22		# diff between command and measured val
+	ADD_CAUSE_ABORTION_BY_COMMUNICATION_LOSS = 23	# con loss
+	ADD_CAUSE_ABORTION_BY_COMMAND = 24				# Control action is blocked due to the data attribute CmdBlk.stVal is TRUE.
+	ADD_CAUSE_NONE = 25								# success
+	ADD_CAUSE_INCONSISTENT_PARAMETERS = 26			# change in test/ctlnum between select/oper
+	ADD_CAUSE_LOCKED_BY_OTHER_CLIENT = 27			# another client selected it
+
+class IedClientError(Enum):
+#     /* general errors */
+#     /** No error occurred - service request has been successful */
+    IED_ERROR_OK = 0
+#     /** The service request can not be executed because the client is not yet connected */
+    IED_ERROR_NOT_CONNECTED = 1
+#     /** Connect service not execute because the client is already connected */
+    IED_ERROR_ALREADY_CONNECTED = 2
+#     /** The service request can not be executed caused by a loss of connection */
+    IED_ERROR_CONNECTION_LOST = 3
+#     /** The service or some given parameters are not supported by the client stack or by the server */
+    IED_ERROR_SERVICE_NOT_SUPPORTED = 4
+#     /** Connection rejected by server */
+    IED_ERROR_CONNECTION_REJECTED = 5
+#     /** Cannot send request because outstanding call limit is reached */
+    IED_ERROR_OUTSTANDING_CALL_LIMIT_REACHED = 6
+#     /* client side errors */
+#     /** API function has been called with an invalid argument */
+    IED_ERROR_USER_PROVIDED_INVALID_ARGUMENT = 10
+    IED_ERROR_ENABLE_REPORT_FAILED_DATASET_MISMATCH = 11
+#     /** The object provided object reference is invalid (there is a syntactical error). */
+    IED_ERROR_OBJECT_REFERENCE_INVALID = 12
+#     /** Received object is of unexpected type */
+    IED_ERROR_UNEXPECTED_VALUE_RECEIVED = 13
+#     /* service error - error reported by server */
+#     /** The communication to the server failed with a timeout */
+    IED_ERROR_TIMEOUT = 20
+#     /** The server rejected the access to the requested object/service due to access control */
+    IED_ERROR_ACCESS_DENIED = 21
+#     /** The server reported that the requested object does not exist (returned by server) */
+    IED_ERROR_OBJECT_DOES_NOT_EXIST = 22
+#     /** The server reported that the requested object already exists */
+    IED_ERROR_OBJECT_EXISTS = 23
+#     /** The server does not support the requested access method (returned by server) */
+    IED_ERROR_OBJECT_ACCESS_UNSUPPORTED = 24
+#     /** The server expected an object of another type (returned by server) */
+    IED_ERROR_TYPE_INCONSISTENT = 25
+#     /** The object or service is temporarily unavailable (returned by server) */
+    IED_ERROR_TEMPORARILY_UNAVAILABLE = 26
+#     /** The specified object is not defined in the server (returned by server) */
+    IED_ERROR_OBJECT_UNDEFINED = 27
+#     /** The specified address is invalid (returned by server) */
+    IED_ERROR_INVALID_ADDRESS = 28
+#     /** Service failed due to a hardware fault (returned by server) */
+    IED_ERROR_HARDWARE_FAULT = 29
+#     /** The requested data type is not supported by the server (returned by server) */
+    IED_ERROR_TYPE_UNSUPPORTED = 30
+#     /** The provided attributes are inconsistent (returned by server) */
+    IED_ERROR_OBJECT_ATTRIBUTE_INCONSISTENT = 31
+#     /** The provided object value is invalid (returned by server) */
+    IED_ERROR_OBJECT_VALUE_INVALID = 32
+#     /** The object is invalidated (returned by server) */
+    IED_ERROR_OBJECT_INVALIDATED = 33
+#     /** Received an invalid response message from the server */
+    IED_ERROR_MALFORMED_MESSAGE = 34
+#     /** Service not implemented */
+    IED_ERROR_SERVICE_NOT_IMPLEMENTED = 98
+#     /** unknown error */
+    IED_ERROR_UNKNOWN = 99
+
 
 logger = logging.getLogger(__name__)
 
 class iec61850client():
 
-	def __init__(self, readvaluecallback = None, loggerRef = None):
+	def __init__(self, readvaluecallback = None, loggerRef = None, cmdTerm_cb = None):
 		global logger
 		if loggerRef != None:
 			logger = loggerRef
 
+		self.cmdTerm_cb = cmdTerm_cb
 		self.polling = {}
 		self.connections = {}
 		self.readvaluecallback = readvaluecallback
@@ -186,9 +279,9 @@ class iec61850client():
 
 						#all DS are assumed not deletable 
 						if isDel == True:
-							logger.error("  DS: %s, is Deletable" % DSname)
+							logger.info("  DS: %s, is Deletable" % DSname)
 						else:
-							logger.error("  DS: %s, not Deletable" % DSname)
+							logger.info("  DS: %s, not Deletable" % DSname)
 						dataSetMemberRef = lib61850.LinkedList_getNext(dataSetMembers)
 
 						i = 0
@@ -721,20 +814,20 @@ class iec61850client():
 	def commandTerminationHandler_cb(self, param, con):
 		#buff = ctypes.cast(param, ctypes.POINTER(ctypes.c_char))
 		buff = ctypes.cast(param,ctypes.c_char_p).value.decode("utf-8")
-		logger.debug("commandTerminationHandler_cb called: %s", buff)
+		#logger.debug("commandTerminationHandler_cb called: %s", buff)
 		lastApplError = lib61850.ControlObjectClient_getLastApplError(con)
 
 		#/* if lastApplError.error != 0 this indicates a CommandTermination- */
-		if lastApplError.error != 0:
-			print("Received CommandTermination-")
-			print(" LastApplError: %i"% lastApplError.error)
-			print("      addCause: %i"% lastApplError.addCause)
-		else:
-			print("Received CommandTermination+")
-		return
+		if self.cmdTerm_cb != None:
+			if lastApplError.error != 0:
+				addCause = AddCause(lastApplError.addCause).name
+				self.cmdTerm_cb("object:%s Received CommandTermination-, LastApplError: %i, addCause: %s" % (buff, lastApplError.error, addCause))
+			else:
+				self.cmdTerm_cb("object:%s Received CommandTermination+" % buff)
 
 
 	def get_controlObject(self, tupl, uri_ref):
+		global logger
 		control = None
 		con = self.connections[tupl]['con']
 
@@ -749,23 +842,25 @@ class iec61850client():
 
 			ctlModel = lib61850.ControlObjectClient_getControlModel(control)
 			if ctlModel == lib61850.CONTROL_MODEL_DIRECT_ENHANCED or ctlModel == lib61850.CONTROL_MODEL_SBO_ENHANCED:
-				logger.debug("enhanced security")
-				cb = lib61850.CommandTerminationHandler(self.commandTerminationHandler_cb)
+				logger.info("control object: enhanced security")
+				cbh = lib61850.CommandTerminationHandler(self.commandTerminationHandler_cb)
 
 				ref = bytes(uri_ref.path[1:].encode('utf-8'))
 
-				lib61850.ControlObjectClient_setCommandTerminationHandler(control, cb, ctypes.c_char_p( ref ))
-				self.cb_refs.append(cb) # hard reference to ensure this pointer is not cleaned by the garbage collector
+				lib61850.ControlObjectClient_setCommandTerminationHandler(control, cbh, ctypes.c_char_p( ref ))
+				self.cb_refs.append(cbh) # hard reference to ensure this pointer is not cleaned by the garbage collector
 				self.cb_refs.append(ref)
 			else:
-				logger.debug("normal security")
+				logger.info("control object: normal security")
 		else:
 			control = self.connections[tupl]['control'][ uri_ref.path[1:] ]
 		return control
 
 
 	def operate(self, ref, value):
+		global logger
 		error = -1
+		addCause = ""
 
 		if ref != None:
 			uri_ref = urlparse(ref)
@@ -787,12 +882,21 @@ class iec61850client():
 			ctlVal = iec61850client.getMMsValue("",value,0,mmsType)
 
 			error = lib61850.ControlObjectClient_operate(control, ctlVal, 0)
-			logger.debug("conrol returned:%i, %s" % (error, value))
-			time.sleep(2)
+			if error == 1:
+				logger.info("operate: %s returned succesfull" % value)
+			else:
+				logger.error("operate: %s returned failed" % value)
+				lastApplError = lib61850.ControlObjectClient_getLastApplError(control)
+				addCause = AddCause(lastApplError.addCause).name
+				logger.info("LastApplError: %i, addCause: %s" % ( lastApplError.error, addCause))
+
+			#time.sleep(2)
 			lib61850.MmsValue_delete(ctlVal)		
-		return error
+		return error, addCause
 
 	def select(self, ref, value):
+		global logger
+		addCause = ""
 		error = -1
 
 		if ref != None:
@@ -807,13 +911,20 @@ class iec61850client():
 		err = self.getIED(hostname, port)
 		if err == 0:
 			tupl =  hostname + ":" + str(port)
-
+			
 			control = self.get_controlObject(tupl, uri_ref)
 
 			ctlModel = lib61850.ControlObjectClient_getControlModel(control)
 			if ctlModel == lib61850.CONTROL_MODEL_SBO_NORMAL:
 				logger.debug("SBO ctlmodel")
 				error = lib61850.ControlObjectClient_select(control)
+				if error == 1:
+					logger.info("select: %s returned succesfull" % value)
+				else:
+					logger.error("select: %s returned failed" % value)
+					lastApplError = lib61850.ControlObjectClient_getLastApplError(control)
+					addCause = AddCause(lastApplError.addCause).name
+					logger.error("LastApplError: %i, addCause: %s" % ( lastApplError.error, addCause))
 
 			elif ctlModel == lib61850.CONTROL_MODEL_SBO_ENHANCED:
 				logger.debug("SBOw ctlmodel")
@@ -822,15 +933,23 @@ class iec61850client():
 				ctlVal = iec61850client.getMMsValue("",value,0,mmsType)
 				lib61850.ControlObjectClient_setOrigin(control, "mmi", 3)
 				error = lib61850.ControlObjectClient_selectWithValue(control, ctlVal)
+				if error == 1:
+					logger.info("select: %s returned succesfull" % value)
+				else:
+					logger.error("select: %s returned failed" % value)
+					lastApplError = lib61850.ControlObjectClient_getLastApplError(control)
+					addCause = AddCause(lastApplError.addCause).name
+					logger.error("LastApplError: %i, addCause: %s" % ( lastApplError.error, addCause))
 
 				#time.sleep(2)
 				lib61850.MmsValue_delete(ctlVal)
 
 			else:
 				logger.error("cannot select object with ctlmodel: %i" % ctlModel)
+				addCause = ("cannot select object with ctlmodel: %i" % ctlModel)
 				error = -1
 
-		return error
+		return error, addCause
 
 	def cancel(self, ref):
 		error = -1
@@ -852,8 +971,6 @@ class iec61850client():
 
 		return error
 
-def cb(a,b):
-	print("cb called!")
 
 
 if __name__=="__main__":

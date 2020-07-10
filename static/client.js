@@ -362,15 +362,18 @@ function operateDialog(ref){
     //based on element type, create dialog (type: int, float, enum, bool?)
     //(drop-down for forcing a different ctlmodel?)
     content = '<form>';   
-    content += '<div style="" ><b>Element: </b></div><br><div class="controlInput"><i>' + ref + '</i></div><br>'; //+ " : " + JSON.stringify(data);
+    content += '<div><b>Element: </b></div><br>';
+    content += '<div class="controlInput"><i>' + ref + '</i></div>';
+    content += '<div id="ctl_status" class="controlInput" style="background-color: #425969; margin: 2px;"><b><i>Status:</i></b> Ready</div><br>';
 
-    content += '<div style=""><label for="ctlVal"><b>CtlVal: (CtlModel: '+ ctlModel +')</b></label></div><br>';
+    content += '<div><label for="ctlVal"><b>CtlVal: (CtlModel: '+ ctlModel +')</b></label></div><br>';
     content += '<input  class="controlInput" id="ctlVal" type="text" value="'+ctlVal+'"/><br>';
 
-    content += '<div style=""><label for="orCat"><b>orCat:</b></label></div><br>';
+    content += '<div><label for="orCat"><b>orCat:</b></label></div><br>';
     content += '<input  class="controlInput" id="orCat" type="text" value="'+orCat+'"/><br>';
-    content += '<div style=""><label for="orIdent"><b>orIdent:</b></label></div><br>';
+    content += '<div><label for="orIdent"><b>orIdent:</b></label></div><br>';
     content += '<input  class="controlInput" id="orIdent" type="text" value="'+orIdent+'"/><br>';
+
     if (ctlModel == 2 || ctlModel == 4){
       content += '<br><button class="controlBtn" type="submit" id="select">Select</button><br>';
     }
@@ -380,6 +383,7 @@ function operateDialog(ref){
     if (ctlModel == 2 || ctlModel == 4){
       content += '<br><button class="controlBtn" type="submit" id="cancel">Cancel</button><br>';
     }
+
     content += '</form>';
 
     var dialog = new top.PopLayer({ 
@@ -395,32 +399,42 @@ function operateDialog(ref){
       // submit write request
 
       if(action == 'operate'){
-        socket.emit('operate', { id : ref, value : val.value }, function(err){
+        socket.emit('operate', { id : ref, value : val.value }, function(err,errText){
           if(err==1){
-            dialog.destroy();
+            $('#ctl_status').css('background-color', 'green');
+            $("#ctl_status")[0].innerHTML = "<b><i>Status:</i></b> Object operated";
+            //dialog.destroy();
           }else{
             // show error
-            alert("could not operate with error code:"+err);
+            //alert("could not operate with error code:"+err);
+            $('#ctl_status').css('background-color', 'red');
+            $("#ctl_status")[0].innerHTML = "<b><i>Status:</i></b> Could not operate; error code:"+errText;
           }
         });
       }
       if(action == 'select'){
-        socket.emit('select', { id : ref, value : val.value }, function(err){
+        socket.emit('select', { id : ref, value : val.value }, function(err,errText){
           if(err==1){
-            alert(ref + " selected!");
+            //alert(ref + " selected!");
+            $('#ctl_status').css('background-color', 'green');
+            $("#ctl_status")[0].innerHTML = "<b><i>Status:</i></b> Object selected";
           }else{
             // show error
-            alert("could not select with error code:"+err);
+            $('#ctl_status').css('background-color', 'red');
+            $("#ctl_status")[0].innerHTML = "<b><i>Status:</i></b> Could not select; error code:"+errText;
           }
         });
       }
       if(action == 'cancel'){
-        socket.emit('cancel', { id : ref }, function(err){
+        socket.emit('cancel', { id : ref }, function(err,errText){
           if(err==1){
-            dialog.destroy();
+            $('#ctl_status').css('background-color', 'green');
+            $("#ctl_status")[0].innerHTML = "<b><i>Status:</i></b> Object cancelled";
+            //dialog.destroy();
           }else{
             // show error
-            alert("could not cancel with error code:"+err);
+            $('#ctl_status').css('background-color', 'red');
+            $("#ctl_status")[0].innerHTML = "<b><i>Status:</i></b> Could not cancel; error code:"+errText;
           }
         });
       }
@@ -439,7 +453,9 @@ function writeDialog(refid, ref){
     //based on element type, create dialog (type: int, float, text, enum, bool, bitstring)
     //if ref endswith .Oper/.SBO/.SBOw,.Cancel, provide dialog based on ctlmodel (drop-down for forcing a different model?)
     content = '<form>';   
-    content += '<div style="" ><b>Element: </b></div><br><div class="controlInput"><i>' + ref + '</i></div><br>'; //+ " : " + JSON.stringify(data);
+    content += '<div style="" ><b>Element: </b></div><br><div class="controlInput"><i>' + ref + '</i></div>'; //+ " : " + JSON.stringify(data);
+    content += '<div id="wrt_status" class="controlInput" style="background-color: #425969; margin: 2px;"><b><i>Status:</i></b> Ready</div><br>';
+
     content += '<div style=""><label for="inp"><b>Value: ( type : '+ data['type'] +')</b></label></div><br>';
     content += '<input  class="controlInput" id="inp" type="text" value="'+data['value']+'"/><br>';
     content += '<br><button class="controlBtn" type="submit">Write</button><br>';
@@ -455,12 +471,16 @@ function writeDialog(refid, ref){
       // check input values
       var val = event.target['inp'];
       // submit write request
-      socket.emit('write_value', { id : refid, value : val.value }, function(err){
+      socket.emit('write_value', { id : refid, value : val.value }, function(err, errText){
         if(err==0){
+          $('#wrt_status').css('background-color', 'green');
+          $("#wrt_status")[0].innerHTML = "<b><i>Status:</i></b> Object written";
           dialog.destroy();
         }else{
           // show error
-          alert("could not write value with error code:"+err);
+          $('#wrt_status').css('background-color', 'red');
+          $("#wrt_status")[0].innerHTML = "<b><i>Status:</i></b> Could not write value; error code:"+errText;
+          //alert("could not write value with error code:"+err);
         }
       });
     });
