@@ -219,7 +219,7 @@ class iec61850client():
 		deviceList = lib61850.IedConnection_getLogicalDeviceList(con, ctypes.byref(error))
 
 		if error.value != 0:
-			logger.error("could not get logical device list, error:%i" % error)
+			logger.error("could not get logical device list, error:%i" % error.value)
 
 		if deviceList:
 			device = lib61850.LinkedList_getNext(deviceList)
