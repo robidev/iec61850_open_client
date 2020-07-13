@@ -104,16 +104,20 @@ logger = logging.getLogger(__name__)
 
 class iec61850client():
 
-	def __init__(self, readvaluecallback = None, loggerRef = None, cmdTerm_cb = None):
+	def __init__(self, readvaluecallback = None, loggerRef = None, cmdTerm_cb = None, Rpt_cb = None):
 		global logger
 		if loggerRef != None:
 			logger = loggerRef
 
-		self.cmdTerm_cb = cmdTerm_cb
 		self.polling = {}
 		self.connections = {}
+		#callbacks, WARNING when a callback is called from a non-python created thread, socketio breaks..
 		self.readvaluecallback = readvaluecallback
+		self.cmdTerm_cb = cmdTerm_cb
+		self.Rpt_cb = Rpt_cb
+
 		self.cb_refs = [] # used to ensure the garbage collector does not clean up used callbacks
+		self.reporting = {} # used on reconnect to reenable the rcb's
 
 
 	@staticmethod
@@ -451,7 +455,7 @@ class iec61850client():
 						err = 0
 					else:
 						logger.error("could not read DA: %s from device" % ref)
-						err = -1
+						err = error.value
 
 				else:
 					submodel[ path[0] ] = iec61850client.printDataDirectory(con, ref)
@@ -484,7 +488,7 @@ class iec61850client():
 				return {}, []
 		
 		if len(_ref) > 2:
-			logger.error("cannot parse ref, more then 1 '/' encountered ")
+			logger.error("cannot parse ref, more than 1 '/' encountered ")
 			return {}, []
 		#one / encountered
 		LD = _ref[0]
@@ -585,6 +589,21 @@ class iec61850client():
 			if model: #if model is not empty
 				# store the model
 				self.connections[tupl]["model"] = model
+
+				#reenable the rcb's if applicable
+				if tupl in self.reporting and len(self.reporting[tupl]) > 0:
+					for refdata in self.reporting[tupl]:
+						rcb = refdata["rcb"]
+						error = lib61850.IedClientError()
+						rcb = lib61850.IedConnection_getRCBValues(con, ctypes.byref(error), refdata["RPT"], rcb)
+						RptId = lib61850.ClientReportControlBlock_getRptId(rcb)
+						lib61850.IedConnection_installReportHandler(con, refdata["RPT"], RptId, refdata["cbh"], id(refdata["refdata"]))
+
+						lib61850.ClientReportControlBlock_setRptEna(rcb, True)
+						lib61850.ClientReportControlBlock_setGI(rcb, True)
+						lib61850.IedConnection_setRCBValues(con, ctypes.byref(error), rcb, lib61850.RCB_ELEMENT_RPT_ENA | lib61850.RCB_ELEMENT_GI, False)
+						refdata["rcb"] = rcb
+
 				return 0
 			else:
 				return -1
@@ -622,7 +641,8 @@ class iec61850client():
 			if not model:
 				logger.error("no valid model")
 				return -1
-
+			
+			#todo:check if needed
 			model, error = iec61850client.writeValue(con, model, uri_ref.path[1:], value)
 			if error == 0:
 				self.connections[tupl]['model'] = model
@@ -698,13 +718,126 @@ class iec61850client():
 			logger.error("no connection to IED: %s:%s" % (uri_ref.hostname, port) )
 		return {}, -1
 
+	def ReportHandler_cb(self, param, report):
+		#parameter is dataset by ref.
+		refdata = ctypes.cast(param, ctypes.py_object).value
+		key = refdata[0]
+		tupl = refdata[1]
+		LD = refdata[2]
+		LN = refdata[3]
+		DSRef = refdata[4]
+
+		a = lib61850.ClientReport_getRcbReference(report)
+		b = lib61850.ClientReport_getRptId(report)
+		reason = lib61850.ClientReport_getReasonForInclusion(report, 0)
+		d = lib61850.ReasonForInclusion_getValueAsString(reason)
+		#print("Callback: RTP received report for %s with rptId %s, DSRef %s and inclusion: %s" % ( a,b,DSRef,d ) )
+		
+		dataSetValues = lib61850.ClientReport_getDataSetValues(report)
+		dataset = self.connections[tupl]['model'][LD][LN][DSRef]
+		for index in dataset:
+			reason = lib61850.ClientReport_getReasonForInclusion(report, int(index))
+			if reason != lib61850.IEC61850_REASON_NOT_INCLUDED:
+				mmsval = lib61850.MmsValue_getElement(dataSetValues, int(index))
+				DaRef = dataset[index]['value']
+				val, _type = iec61850client.printValue(mmsval)
+				logger.debug(DaRef + ":" + val + "(" + _type + ")")
+
+				submodel, _ = iec61850client.parseRef(self.connections[tupl]['model'],DaRef)
+				submodel["value"] = val
+				
+				if self.Rpt_cb != None:
+					self.Rpt_cb(key, submodel)
+
+
+	def registerForReporting(self, key, tupl, ref):
+		# check if present in dataset/report, and subscribe 
+		LD = ""
+		LN = ""
+		DS = ""
+		Idx = ""
+		con = self.connections[tupl]['con']
+		model = self.connections[tupl]['model']
+
+		class BreakIt(Exception): pass
+
+		try:
+			for LD_name in model:
+				for LN_name in model[LD_name]:
+					for DSname in model[LD_name][LN_name]:
+						if ( "0" in model[LD_name][LN_name][DSname] and 
+								"reftype" in model[LD_name][LN_name][DSname]["0"] and 
+								model[LD_name][LN_name][DSname]["0"]['reftype'] == "DX" ):
+							for index in model[LD_name][LN_name][DSname]:
+								if ref.startswith(model[LD_name][LN_name][DSname][index]['value']):
+									logger.info("DATASET found! Ref:%s in DSref: %s" % (ref, model[LD_name][LN_name][DSname][index]['value']))
+									logger.info("  DSRef:%s" % LD_name + "/" + LN_name + "." + DSname )
+									LD = LD_name
+									LN = LN_name
+									DS = DSname
+									Idx = index
+									raise BreakIt
+		except BreakIt:
+			pass
+
+		if Idx == "":
+			logger.error("RPT: could not find dataset for ref: %s" % ref)
+			return False
+
+		for RP in model[LD][LN]:
+			if "DatSet" in model[LD][LN][RP] and model[LD][LN][RP]["DatSet"]["value"] == LD + "/" + LN + "$" + DS:
+				logger.info("RPT found! Ref:%s" % LD + "/" + LN + "." + RP)
+				RPT = LD + "/" + LN + "." + model[LD][LN][RP]["DatSet"]["FC"] + "." + RP
+
+				error = lib61850.IedClientError()
+				if RPT in self.cb_refs:
+					logger.info("RPT allready registered")
+					rcb = lib61850.IedConnection_getRCBValues(con, ctypes.byref(error), RPT, None)
+					if lib61850.ClientReportControlBlock_getRptEna(rcb):
+						logger.info("RPT allready enabled")
+					else:
+						logger.info("RPT disabled")
+					return True
+
+
+				rcb = lib61850.IedConnection_getRCBValues(con, ctypes.byref(error), RPT, None)
+				RptId = lib61850.ClientReportControlBlock_getRptId(rcb)
+
+				cbh = lib61850.ReportCallbackFunction(self.ReportHandler_cb)
+
+				refdata = [key, tupl, LD, LN, DS]
+				ref = id(refdata) #model[LD][LN][DS])# bytes(str(LD + "/" + LN + "." + DS).encode('utf-8')) # ctypes.c_char_p( ref )
+				lib61850.IedConnection_installReportHandler(con, RPT, RptId, cbh, ref)
+				
+				#lib61850.ClientReportControlBlock_setResv(rcb, True)
+				lib61850.ClientReportControlBlock_setRptEna(rcb, True)
+				lib61850.ClientReportControlBlock_setGI(rcb, True)
+				lib61850.IedConnection_setRCBValues(con, ctypes.byref(error), rcb, lib61850.RCB_ELEMENT_RPT_ENA | lib61850.RCB_ELEMENT_GI, True)
+
+				self.cb_refs.append(RPT)
+
+
+				#register rcb on this connection, so it can be enabled on a reconnect
+				RcbData = {}
+				RcbData["rcb"] = rcb
+				RcbData["cbh"] = cbh # hard reference to ensure this pointer is not cleaned by the garbage collector
+				RcbData["RPT"] = RPT # ref to report
+				RcbData["refdata"] = refdata # hard ref to dataset
+
+				if not tupl in self.reporting:
+					self.reporting [tupl] = []
+				self.reporting[tupl].append(RcbData)
+
+				logger.info("RPT registered succesfull")
+				return True
+		logger.error("could not find report for dataset")
+		return False
+
+		
+
 
 	# register value for reading
 	def registerReadValue(self,ref):
-		# check if present in dataset/report, and subscribe TODO
-		
-		# fallback to periodic poll when no report+dataset configured
-		#if we allready have it in the list
 		if ref in self.polling:
 			logger.debug("reference: %s allready registered" % ref)
 			return 0
@@ -729,11 +862,17 @@ class iec61850client():
 		err = self.getIED(uri_ref.hostname, port)
 		if err == 0:
 			#only add an IED if it could be connected to
+			con = self.connections[tupl]['con']
 			model = self.connections[tupl]['model']
 			#check if the ref exists in the model
 			submodel, path = iec61850client.parseRef(model, uri_ref.path[1:])
 			if submodel:
-				self.polling[ref] = 1
+				rpt = self.registerForReporting(ref, tupl, uri_ref.path[1:])
+				if rpt == False:
+					# fallback to periodic poll when no report+dataset configured
+					#if we allready have it in the list
+					self.polling[ref] = 1
+				#self.polling[ref] = 1
 				return 0
 			else:
 				logger.error("could not find %s in model" % uri_ref.path[1:])
@@ -782,8 +921,11 @@ class iec61850client():
 						if err == 3: #we lost the connection
 							lib61850.IedConnection_destroy(con)
 							self.connections[tupl]['con'] = None
+				else:
+					logger.debug("no connection or model")
+
 			else:
-				logger.error("model not updated for %s with error: %i" % (key, err))
+				logger.debug("IED not available for %s with error: %i" % (key, err))
 
 
 	# retrieve datamodel from server
@@ -803,7 +945,7 @@ class iec61850client():
 			tupl =  hostname + ":" + str(port)
 			return self.connections[tupl]['model']
 		else:
-			logger.error("no connection to IED: %s:%s" % (hostname, port) )
+			logger.debug("no connection to IED: %s:%s" % (hostname, port) )
 			return {}
 	
 

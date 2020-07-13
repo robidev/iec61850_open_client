@@ -22,6 +22,7 @@ reset_log = False
 async_mode = None
 local_svg = True
 async_msg = []
+async_rpt = {}
 
 #webserver
 app = Flask(__name__, template_folder='templates', static_folder='static')
@@ -177,6 +178,9 @@ def cmdTerm_cb(msg):
   async_msg.append(msg)
 # worker subroutines
 
+def Rpt_cb(key, value):
+  async_rpt[key] = value
+
 #add info to the ied datamodel tab
 def process_info_event(loaded_json): 
   global focus
@@ -235,12 +239,6 @@ def worker():
   global client
   socketio.sleep(tick)
 
-  #sh = socketHandler(socketio)
-  #sh.setLevel(logging.INFO)
-  #fm = logging.Formatter('%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
-  #sh.setFormatter(fm)
-  #logger.addHandler(sh)
-
   logger.info("worker treat started")
 
   while True:
@@ -272,8 +270,14 @@ def worker():
       loaded_json['data'] = model
       process_info_event(loaded_json)
 
-      while len(async_msg) > 0:
-        logger.info(async_msg.pop(0))
+    while len(async_msg) > 0:
+      logger.info(async_msg.pop(0))
+    
+    for key in list(async_rpt):
+      val = async_rpt.pop(key)
+      socketio.emit("svg_value_update_event",{ 'element' : key, 'data' : val })
+      logger.debug("%s updated via report" % key)
+        
 
 
 if __name__ == '__main__':
@@ -293,6 +297,6 @@ if __name__ == '__main__':
   	local_svg = False
 
   logger.info("started")
-  client = libiec61850client.iec61850client(readvaluecallback, logger, cmdTerm_cb)
+  client = libiec61850client.iec61850client(readvaluecallback, logger, cmdTerm_cb, Rpt_cb)
   socketio.run(app,host="0.0.0.0")
 
