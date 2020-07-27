@@ -64,6 +64,24 @@
     </line>
   </g>
 
+
+  <line id="S12/E1/W1/BB1" class="LINE" stroke="#ffffff" stroke-linecap="undefined" stroke-linejoin="undefined" y2="290.359068" x2="266" y1="290.359068" x1="166" stroke-width="1.5" fill="none"/>
+  <line id="S12/E1/W1/BB1" class="LINE" stroke="#ffffff" stroke-linecap="undefined" stroke-linejoin="undefined" y2="290.359068" x2="166" y1="300.49959" x1="166" stroke-width="1.5" fill="none"/>
+  <g id="S12/E1/Q1/QB2">
+    <title>SWI</title>
+    <text id="iec61850://10.0.0.2:102/IED1_XCBRGenericIO/XSWI3.Pos.stVal"     class="MEAS" data-text="DIS: QB1={value}" fill="#ffffff" stroke="#ffffff" x="186" y="314.666538" font-size="12" font-family="Helvetica, Arial, sans-serif" text-anchor="start" xml:space="preserve" font-weight="normal" font-style="normal"></text>
+    <rect id="iec61850://10.0.0.2:102/IED1_XCBRGenericIO/CSWI3.Pos"    class="CSWI" height="19" width="19" y="300.49959" x="156.864387" stroke="#ffffff" fill="#000000"/> 
+    <line id="iec61850://10.0.0.2:102/IED1_XCBRGenericIO/XSWI3.Pos.stVal"     class="XSWI" stroke="#ffffff" stroke-linecap="undefined" stroke-linejoin="undefined" y2="320" x2="166" y1="300" x1="166" stroke-width="4" fill="none">
+        <animateTransform id="open" attributeName="transform" attributeType="XML" type="rotate" to="90 166 310 " dur="100ms" fill="freeze" />
+        <animateTransform id="close" attributeName="transform" attributeType="XML" type="rotate" to="0 166 310 " dur="100ms" fill="freeze" />
+        <animateTransform id="transition" attributeName="transform" attributeType="XML" type="rotate" to="45 166 310 " dur="100ms" fill="freeze" />
+        <animateTransform id="error" attributeName="stroke" attributeType="XML" to="red" dur="100ms" fill="freeze" />
+    </line>
+  </g>
+  <line id="S12/E1/W1/BB1" class="LINE" stroke="#ffffff" stroke-linecap="undefined" stroke-linejoin="undefined" y2="360" x2="166" y1="320.436511" x1="166" stroke-width="1.5" fill="none"/>
+  <text id="GND" class="LOAD" stroke="#ffffff"  xml:space="preserve" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="24" y="380" x="166" fill="#ffffff">GND</text>
+
+
   <line id="S12/E1/W1/BB1" class="LINE" stroke="#ffffff" stroke-linecap="undefined" stroke-linejoin="undefined" y2="360" x2="266" y1="320.436511" x1="266" stroke-width="1.5" fill="none"/>
 
   <text id="LOAD" class="LOAD" stroke="#ffffff"  xml:space="preserve" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="24" y="380" x="266" fill="#ffffff">Load</text>

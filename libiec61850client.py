@@ -147,7 +147,7 @@ class iec61850client():
 		if _type == "mms-string":
 			return ("%s" % lib61850.MmsValue_toString(value).decode("utf-8")), _type
 		if _type == "structure":
-			return ("STRUCTURE"), _type
+			return ("STRUCTURE"), _type # TODO: modify this to return a structure that can be mapped
 		if _type == "octet-string":
 			len = lib61850.MmsValue_getOctetStringSize(value)
 			buf = lib61850.MmsValue_getOctetStringBuffer(value)
@@ -398,7 +398,7 @@ class iec61850client():
 			return None
 		if typeVal == "oid" or typeval == lib61850.MMS_OBJ_ID:
 			return None
-		if typeVal == "structure" or typeval == lib61850.MMS_STRUCTURE:
+		if typeVal == "structure" or typeval == lib61850.MMS_STRUCTURE: # TODO: parse string, and write it into struct.
 			return  None
 		if typeVal == "unknown(error)":
 			return None
@@ -718,6 +718,7 @@ class iec61850client():
 			logger.error("no connection to IED: %s:%s" % (uri_ref.hostname, port) )
 		return {}, -1
 
+
 	def ReportHandler_cb(self, param, report):
 		#parameter is dataset by ref.
 		refdata = ctypes.cast(param, ctypes.py_object).value
@@ -832,8 +833,6 @@ class iec61850client():
 				return True
 		logger.error("could not find report for dataset")
 		return False
-
-		
 
 
 	# register value for reading
@@ -1036,6 +1035,7 @@ class iec61850client():
 			lib61850.MmsValue_delete(ctlVal)		
 		return error, addCause
 
+
 	def select(self, ref, value):
 		global logger
 		addCause = ""
@@ -1093,6 +1093,7 @@ class iec61850client():
 
 		return error, addCause
 
+
 	def cancel(self, ref):
 		error = -1
 
@@ -1112,7 +1113,6 @@ class iec61850client():
 			error = lib61850.ControlObjectClient_cancel(control)
 
 		return error
-
 
 
 if __name__=="__main__":
