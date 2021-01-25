@@ -8,7 +8,7 @@
     <rect id="a1"  class="" stroke="#ffffff" y="10" x="2" height="24" width="164" fill="#000000" stroke-width="1.5"/> 
     <text id="a2"  class="" stroke="#ffffff" y="26" x="6" xml:space="preserve" text-anchor="left" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#ffffff">open simulation tab</text>
   </a>
-  
+  <text id="iec61850://10.0.0.3:102/[MX] IED2_PTOCGenericIO/GGIO1.AnIn1.mag.f" class="MEAS" data-text=""></text>
   <title>Bay 1</title>
   <text id="IFL" class="IFL" stroke="#ffffff" xml:space="preserve" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="24" y="80" x="266" fill="#ffffff">220KV Feed</text>
   <ellipse id="svg_top" stroke="#ffffff" ry="2.424242" rx="2.121212" cy="91.858974" cx="266" fill-opacity="null" stroke-width="1.5" fill="none"/>
