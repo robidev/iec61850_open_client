@@ -794,9 +794,9 @@ class iec61850client():
 					logger.info("RPT allready registered")
 					rcb = lib61850.IedConnection_getRCBValues(con, ctypes.byref(error), RPT, None)
 					if lib61850.ClientReportControlBlock_getRptEna(rcb):
-						logger.info("RPT allready enabled")
+						logger.info("RPT: allready enabled")
 					else:
-						logger.info("RPT disabled")
+						logger.info("RPT: disabled")
 					return True
 
 
@@ -810,6 +810,10 @@ class iec61850client():
 				lib61850.IedConnection_installReportHandler(con, RPT, RptId, cbh, ref)
 				
 				#lib61850.ClientReportControlBlock_setResv(rcb, True)
+				if lib61850.ClientReportControlBlock_getRptEna(rcb) == True:
+					logger.info("RPT allready enabled by another client")
+					continue
+
 				lib61850.ClientReportControlBlock_setRptEna(rcb, True)
 				lib61850.ClientReportControlBlock_setGI(rcb, True)
 				lib61850.IedConnection_setRCBValues(con, ctypes.byref(error), rcb, lib61850.RCB_ELEMENT_RPT_ENA | lib61850.RCB_ELEMENT_GI, True)

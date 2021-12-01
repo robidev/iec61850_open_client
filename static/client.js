@@ -12,10 +12,12 @@ $(document).ready(function() {
   if(mmi.getSVGDocument() == null){//normal situation where svg is loaded later
     mmi.addEventListener("load",function(){ 
       svg_load(mmi); 
+      svgPanZoom(mmi, { zoomEnabled: true, controlIconsEnabled: true });
     },false);
   }
   else {//race condition, where svg is allready loaded from cache
     svg_load(mmi);
+      svgPanZoom(mmi, { zoomEnabled: true, controlIconsEnabled: true });
   }
   
 
