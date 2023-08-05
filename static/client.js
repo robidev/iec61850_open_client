@@ -44,6 +44,12 @@ $(document).ready(function() {
     var element = data['element'];
     var value = data['data']['value'];
     var type = data['data']['type'];
+    if( type == 'bit-string'){//invert endian if type is bit-string
+      if(value == '1')
+        value = '2';
+      else if(value == '2')
+        value = '1';
+    }
 
     if(svgRoot != null){//if the svg is loaded
       //check for each occurence of id, there can be multiple instances of the same id, with different classes
@@ -92,22 +98,9 @@ $(document).ready(function() {
             }
           }
           if(type == 'bit-string'){
-            if(value == '1'){
-              if(svgElementData[el.id]['position'] != false) {
+            if(value == '2'){
+              if(svgElementData[el.id]['position'] != true) {
                 $("#close",el)[0].beginElement();
-                svgElementData[el.id]['position'] = false;
-
-                var ref = el.id;
-                var sibling = $(el).siblings(".CSWI");//find a CSWI sibling, and operate on that instead
-                if(sibling.length > 0){
-                  ref = sibling[0].id;
-                }
-                svgElementData[ref]['position'] = false;
-              }
-            }
-            else if(value == '2'){
-              if(svgElementData[el.id]['position'] != true){
-                $("#open",el)[0].beginElement();
                 svgElementData[el.id]['position'] = true;
 
                 var ref = el.id;
@@ -116,6 +109,19 @@ $(document).ready(function() {
                   ref = sibling[0].id;
                 }
                 svgElementData[ref]['position'] = true;
+              }
+            }
+            else if(value == '1'){
+              if(svgElementData[el.id]['position'] != false){
+                $("#open",el)[0].beginElement();
+                svgElementData[el.id]['position'] = false;
+
+                var ref = el.id;
+                var sibling = $(el).siblings(".CSWI");//find a CSWI sibling, and operate on that instead
+                if(sibling.length > 0){
+                  ref = sibling[0].id;
+                }
+                svgElementData[ref]['position'] = false;
               }
             }
             else if(value == '0'){
