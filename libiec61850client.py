@@ -579,6 +579,63 @@ class iec61850client():
 			self.connections[tupl]["model"] = {}
 
 		con = lib61850.IedConnection_create()
+
+		#		/* To change MMS parameters you need to get access to the underlying MmsConnection */
+		#mmsConnection = lib61850.IedConnection_getMmsConnection(con)
+		#    /* Get the container for the parameters */
+		#parameters = lib61850.MmsConnection_getIsoConnectionParameters(mmsConnection)
+		#    /* set remote AP-Title according to SCL file example from IEC 61850-8-1 */
+		#lib61850.IsoConnectionParameters_setRemoteApTitle(parameters, "1.3.9999.13", 12)
+		#    /* just some arbitrary numbers */
+		#lib61850.IsoConnectionParameters_setLocalApTitle(parameters, "1.2.1200.15.3", 1);
+		#    /* use this to skip AP-Title completely - this may be required by some "obscure" servers */
+		#lib61850.IsoConnectionParameters_setRemoteApTitle(parameters, None, 0);
+		#lib61850.IsoConnectionParameters_setLocalApTitle(parameters, None, 0);
+
+		#    TSelector localTSelector = { 3, { 0x00, 0x01, 0x02 } };
+		localTSelector = lib61850.TSelector(
+		    	size=3,
+    			value=(ctypes.c_uint8 * 4)(0x00, 0x01, 0x02, 0x00)  # last element padded
+			)
+		#    TSelector remoteTSelector = { 2, { 0x00, 0x01 } };
+		remoteTSelector = lib61850.TSelector(
+		    	size=2,
+    			value=(ctypes.c_uint8 * 4)(0x00, 0x01, 0x00, 0x00)  # last 2 elements padded
+			)
+		#    SSelector remoteSSelector = { 2, { 0, 1 } };
+		remoteSSelector = lib61850.SSelector(
+		    	size=2,
+    			value=(ctypes.c_uint8 * 16)(0x00, 0x01, *([0x00] * 14))  # last 14 elements padded
+			)
+		#    SSelector localSSelector = { 5, { 0, 1, 2, 3, 4 } };
+		localSSelector = lib61850.SSelector(
+		    	size=5,
+    			value=(ctypes.c_uint8 * 16)(0x00, 0x01, 0x02, 0x03, 0x04, *([0x00] * 11))  # last 11 elements padded
+			)
+		#    PSelector localPSelector = {4, { 0x12, 0x34, 0x56, 0x78 } };
+		localPSelector = lib61850.PSelector(
+		    	size=4,
+    			value=(ctypes.c_uint8 * 16)(0x12, 0x34, 0x56, 0x78, *([0x00] * 12))  # 
+			)
+		#    PSelector remotePSelector = {4, { 0x87, 0x65, 0x43, 0x21 } };
+		remotePSelector = lib61850.PSelector(
+		    	size=4,
+    			value=(ctypes.c_uint8 * 16)(0x87, 0x65, 0x43, 0x21, *([0x00] * 12))  # 
+			)
+		#    /* change parameters for presentation, session and transport layers */
+		#lib61850.IsoConnectionParameters_setRemoteAddresses(parameters, remotePSelector, remoteSSelector, localTSelector)
+		#lib61850.IsoConnectionParameters_setLocalAddresses(parameters, localPSelector, localSSelector, remoteTSelector)
+	
+		#
+		#    /* use authentication */
+		#auth = lib61850.AcseAuthenticationParameter_create();
+		#lib61850.AcseAuthenticationParameter_setAuthMechanism(auth, lib61850.ACSE_AUTH_PASSWORD);
+		#password = "user1@testpw";
+		#lib61850.AcseAuthenticationParameter_setPassword(auth, password);
+		#lib61850.IsoConnectionParameters_setAcseAuthenticationParameter(parameters, auth);
+		#lib61850.IedConnection_setConnectTimeout(con, 10000);
+
+
 		error = lib61850.IedClientError()
 		lib61850.IedConnection_connect(con,ctypes.byref(error), host, port)
 		if error.value == lib61850.IED_ERROR_OK:
@@ -1127,10 +1184,11 @@ if __name__=="__main__":
 
 	hostname = "localhost"
 	tcpPort = 9102
+	port = 102
 	if len(sys.argv)>1:
 		hostname = sys.argv[1]
 	if len(sys.argv)>2:
-		port = sys.argv[2]
+		port = int(sys.argv[2])
 
 
 	#error = lib61850.IedClientError()
@@ -1191,7 +1249,7 @@ if __name__=="__main__":
 	#lib61850.IedConnection_destroy(con)
 
 	cl = iec61850client()
-	model = cl.getDatamodel(None,'localhost',102)
+	model = cl.getDatamodel(None,hostname,102)
 	cl.printrefs(model)
 
 	#err = cl.registerReadValue("iec61850://127.0.0.1:9102/IED3_SMVMUnn/MMXU2.AvAPhs")
@@ -1206,25 +1264,25 @@ if __name__=="__main__":
 	#time.sleep(0.719)
 	#cl.poll()
 	#cl.registerWriteValue("iec61850://127.0.0.1:9102/IED3_SMVMUnn/LLN0.MSVCB01.SvEna",True)
-	error = cl.select("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI2.Pos", "True")
-	if error == 1:
-		print("selected successfully")
-	else:
-		print("failed to select")	
+	#error = cl.select("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI2.Pos", "True")
+	#if error == 1:
+	#	print("selected successfully")
+	#else:
+	#	print("failed to select")	
 	#control = None
-	if cl.operate("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI2.Pos", "True") == 1:
-		print("operated successfully")
-	else:
-		print("failed to operate")
+	#if cl.operate("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI2.Pos", "True") == 1:
+	#	print("operated successfully")
+	#else:
+	#	print("failed to operate")
 	
-	error = cl.select("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI1.Pos", "True")
-	if error == 1:
-		print("selected successfully")
-	else:
-		print("failed to select")	
+	#error = cl.select("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI1.Pos", "True")
+	#if error == 1:
+	#	print("selected successfully")
+	#else:
+	#	print("failed to select")	
 	#control = None
-	if cl.operate("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI1.Pos", "True") == 1:
-		print("operated successfully")
-	else:
-		print("failed to operate")
+	#if cl.operate("iec61850://127.0.0.1:102/IED1_XCBRGenericIO/CSWI1.Pos", "True") == 1:
+	#	print("operated successfully")
+	#else:
+	#	print("failed to operate")
 
