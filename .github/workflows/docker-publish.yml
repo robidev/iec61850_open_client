@@ -21,7 +21,7 @@ jobs:
       matrix:
         include:
           - dockerfile: Dockerfile.libiec61850_client
-            image: iec61850_open_client/libiec61850_client
+            image: ${{ github.actor }}/libiec61850_client
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
