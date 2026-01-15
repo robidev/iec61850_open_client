@@ -21,7 +21,7 @@ jobs:
       matrix:
         include:
           - dockerfile: Dockerfile.libiec61850_client
-            image: ${{ github.actor }}/libiec61850_client
+            image: libiec61850_client
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -43,6 +43,8 @@ jobs:
         run: |
           TAG="$(echo '${{ github.ref_name }}' | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g' | sed -E 's/^-+|-+$//g')"
           echo "DOCKER_TAG=$TAG" >> $GITHUB_ENV
+          OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "DOCKER_OWNER=$OWNER" >> $GITHUB_ENV
 
       - name: Build ${{ (github.event.action == 'released' || github.event.action == 'prereleased') && 'and push ' || '' }}Docker image
         uses: docker/build-push-action@v6
