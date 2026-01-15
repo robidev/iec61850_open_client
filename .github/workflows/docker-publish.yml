@@ -50,7 +50,7 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           push: ${{ github.event.action == 'released' || github.event.action == 'prereleased' }}
-          platforms: linux/amd64, linux/arm/v6, linux/arm/v7, linux/arm64
+          platforms: linux/amd64, linux/arm64
           tags: ghcr.io/${{ matrix.image }}:${{ env.DOCKER_TAG }},ghcr.io/${{ matrix.image }}:latest-dev${{ github.event.action == 'released' && format(',ghcr.io/{0}:latest', matrix.image) || '' }}
           build-args: |
             BUILD_DATE=${{ github.event.repository.updated_at }}
