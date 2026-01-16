@@ -53,7 +53,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: ${{ github.event.action == 'released' || github.event.action == 'prereleased' }}
           platforms: linux/amd64, linux/arm64
-          tags: ghcr.io/${{ matrix.image }}:${{ env.DOCKER_TAG }},ghcr.io/${{ matrix.image }}:latest-dev${{ github.event.action == 'released' && format(',ghcr.io/{0}:latest', matrix.image) || '' }}
+          tags: ghcr.io/${{ env.DOCKER_OWNER }}/${{ matrix.image }}:${{ env.DOCKER_TAG }},ghcr.io/${{ matrix.image }}:latest-dev${{ github.event.action == 'released' && format(',ghcr.io/{0}/{1}:latest', env.DOCKER_OWNER, matrix.image) || '' }}
           build-args: |
             BUILD_DATE=${{ github.event.repository.updated_at }}
             BUILD_REF=$(git rev-parse --short HEAD)
