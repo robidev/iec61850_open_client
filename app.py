@@ -179,6 +179,7 @@ def cmdTerm_cb(msg):
 # worker subroutines
 
 def Rpt_cb(key, value):
+  #print("key:" + str(key) + " val:" + str(value))
   async_rpt[key] = value
 
 #add info to the ied datamodel tab
