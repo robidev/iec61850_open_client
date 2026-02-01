@@ -1,9 +1,14 @@
-var nodes, edges, network, socket, svgRoot, svgElementData;
+let nodes, edges, network, socket, svgRoot, svgElementData;
 
 $(document).ready(function() {
   svgRoot = null;
   namespace = '';
-  socket = io.connect('http://' + document.domain + ':' + location.port + namespace);
+  //socket = io(`${location.protocol}//${location.host}${namespace}`);
+  //socket = io.connect('http://' + document.domain + ':' + location.port + namespace); // deprecated
+  //socket = io();
+  socket = io({
+                transports: ["websocket"]
+            });
 
   //register data for svg
   var mmi = document.getElementById("mmi_svg");
