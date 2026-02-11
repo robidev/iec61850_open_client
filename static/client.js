@@ -1,9 +1,14 @@
-var nodes, edges, network, socket, svgRoot, svgElementData;
+let nodes, edges, network, socket, svgRoot, svgElementData;
 
 $(document).ready(function() {
   svgRoot = null;
   namespace = '';
-  socket = io.connect('http://' + document.domain + ':' + location.port + namespace);
+  //socket = io(`${location.protocol}//${location.host}${namespace}`);
+  //socket = io.connect('http://' + document.domain + ':' + location.port + namespace); // deprecated
+  //socket = io();
+  socket = io({
+                transports: ["websocket"]
+            });
 
   //register data for svg
   var mmi = document.getElementById("mmi_svg");
@@ -41,6 +46,7 @@ $(document).ready(function() {
   //add info to the ied/datamodel tab
   socket.on('svg_value_update_event', function (data) {
     //event gets called from server when svg data is updated, so update the svg
+
     var element = data['element'];
     var value = data['data']['value'];
     var type = data['data']['type'];
@@ -50,10 +56,10 @@ $(document).ready(function() {
       else if(value == '2')
         value = '1';
     }
-
+    //console.log(data);
     if(svgRoot != null){//if the svg is loaded
       //check for each occurence of id, there can be multiple instances of the same id, with different classes
-      $("#" + $.escapeSelector(element),svgRoot).each(function(idx, el){
+       $('[id="' + element + '"]', svgRoot).each(function (idx, el){
         var cl = el.classList.toString();
 
 

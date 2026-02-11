@@ -797,6 +797,11 @@ class iec61850client():
 			if reason != lib61850.IEC61850_REASON_NOT_INCLUDED:
 				mmsval = lib61850.MmsValue_getElement(dataSetValues, int(index))
 				DaRef = dataset[index]['value']
+				if DaRef != "" and tupl != "":
+					key = "iec61850://" + tupl + "/" + DaRef
+				else:
+					logger.error(f"could not generate from tupl and daref. will use: {key} (is only the first dset entry)")
+
 				val, _type = iec61850client.printValue(mmsval)
 				logger.debug(DaRef + ":" + val + "(" + _type + ")")
 
@@ -1178,7 +1183,7 @@ class iec61850client():
 
 if __name__=="__main__":
 	logging.basicConfig(format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
-		level=logging.DEBUG)
+		level=logging.INFO)
 	# note the `logger` from above is now properly configured
 	logger.debug("started")
 

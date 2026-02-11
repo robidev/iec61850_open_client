@@ -26,7 +26,8 @@ async_rpt = {}
 
 #webserver
 app = Flask(__name__, template_folder='templates', static_folder='static')
-socketio = SocketIO(app, async_mode=async_mode)
+#socketio = SocketIO(app, async_mode=async_mode, logger=True, engineio_logger=True)
+socketio = SocketIO(app, async_mode="eventlet", cors_allowed_origins="*")
 
 #logging handler, for sending logs to the client
 class socketHandler(logging.StreamHandler):
@@ -179,6 +180,7 @@ def cmdTerm_cb(msg):
 # worker subroutines
 
 def Rpt_cb(key, value):
+  #print("key:" + str(key) + " val:" + str(value))
   async_rpt[key] = value
 
 #add info to the ied datamodel tab
