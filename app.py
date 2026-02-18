@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S python3 -u
 from flask import Flask, render_template, session, request, redirect, url_for, jsonify
 from flask_socketio import SocketIO, emit
 from werkzeug.utils import secure_filename
@@ -12,6 +12,8 @@ import os
 import logging
 
 import libiec61850client
+import libiec60870client
+from urllib.parse import urlparse
 
 
 thread = None
@@ -101,20 +103,28 @@ def set_focus(data):
 @socketio.on('read_value', namespace='')
 def read_value(data):
   logger.debug("read value:" + str(data['id'])  )
-  return client.ReadValue(data['id'])
+  uri = urlparse(data['id'])
+  if uri.scheme in clients:
+      return clients[uri.scheme].ReadValue(data['id'])
+  return {}, -1
 
 
 # write call, only supports DA elements
 @socketio.on('write_value', namespace='')
 def write_value(data):
-  global client
   logger.debug("write value:" + str(data['value']) + ", element:" + str(data['id']) )
-  retValue = client.registerWriteValue(str(data['id']),str(data['value']))
-  if retValue > 0:
-    return retValue, libiec61850client.IedClientError(retValue).name
-  if retValue == 0:
-    return retValue, "no error"
-  return retValue, "general error"
+  uri = urlparse(data['id'])
+  if uri.scheme in clients:
+      retValue = clients[uri.scheme].registerWriteValue(str(data['id']),str(data['value']))
+      if uri.scheme == 'iec61850':
+          if retValue > 0:
+              return retValue, libiec61850client.IedClientError(retValue).name
+          if retValue == 0:
+              return retValue, "no error"
+          return retValue, "general error"
+      else:
+          return retValue, "no error" if retValue == 0 else "general error"
+  return -1, "unsupported scheme"
 
 
 
@@ -122,35 +132,48 @@ def write_value(data):
 @socketio.on('operate', namespace='')
 def operate(data):
   logger.debug("operate:" + str(data['id']) + " v:" + str(data['value'])  )
-  return client.operate(str(data['id']),str(data['value']))
+  uri = urlparse(data['id'])
+  if uri.scheme == 'iec61850':
+      return clients['iec61850'].operate(str(data['id']),str(data['value']))
+  if uri.scheme == 'iec60870':
+      return clients['iec60870'].operate(str(data['id']),str(data['value'])) # 1 on success
+  return -1, "Operation not supported for this protocol"
 
 #supports both SBO and SBOw
 @socketio.on('select', namespace='')
 def select(data):
   logger.debug("select:" + str(data['id'])  )
-  return client.select(str(data['id']),str(data['value']))
+  uri = urlparse(data['id'])
+  if uri.scheme == 'iec61850':
+      return clients['iec61850'].select(str(data['id']),str(data['value']))
+  if uri.scheme == 'iec60870':
+      return clients['iec60870'].select(str(data['id']),str(data['value'])) # 1 on success
+  return -1, "Operation not supported for this protocol"
 
 #cancel selection
 @socketio.on('cancel', namespace='')
 def cancel(data):
   logger.debug("cancel:" + str(data['id'])  )
-  return client.cancel(str(data['id']))
+  uri = urlparse(data['id'])
+  if uri.scheme == 'iec61850':
+      return clients['iec61850'].cancel(str(data['id']))
+  return -1, "Operation not supported for this protocol"
 
 
 # register datapoint for polling/reporting
 @socketio.on('register_datapoint', namespace='')
 def register_datapoint(data):
-  global client
   logger.debug("register datapoint:" + str(data) )
-  client.registerReadValue(str(data['id']))
+  uri = urlparse(data['id'])
+  if uri.scheme in clients:
+      clients[uri.scheme].registerReadValue(str(data['id']))
 
 
 # web UI: load datamodels for registered IED's
 @socketio.on('register_datapoint_finished', namespace='')
 def register_datapoint_finished(data):
   #return #there is a bug here, so disable for now
-  global client
-  ieds = client.getRegisteredIEDs()
+  ieds = clients['iec61850'].getRegisteredIEDs()
   for key in ieds:
     tupl = key.split(':')
     hostname = tupl[0]
@@ -160,16 +183,37 @@ def register_datapoint_finished(data):
     port = None
     if len(tupl) > 1 and tupl[1] != "":
       port = int(tupl[1])
-    model = client.getDatamodel(hostname=hostname, port=port)
+    model = clients['iec61850'].getDatamodel(hostname=hostname, port=port)
 
     loaded_json = {}
     loaded_json['host'] = key
     loaded_json['data'] = model
-    process_info_event(loaded_json)
+    lastupdate =  time.time()
+    loaded_json['last'] = lastupdate
+
+    process_info_event(loaded_json,printItemsIEC61850(loaded_json))
+  
+  rtus = clients['iec60870'].getRegisteredRTUs()
+  for key in rtus:
+    tupl = key.split(':')
+    hostname = tupl[0]
+    emit('log_event', {'host':key,'data':'[+] adding RTU info','clear':1})
+    port = None
+    if len(tupl) > 1 and tupl[1] != "":
+      port = int(tupl[1])
+    model = clients['iec60870'].getIOA_list(hostname=hostname, port=port)
+
+    loaded_json = {}
+    loaded_json['host'] = key
+    loaded_json['data'] = model
+    lastupdate =  time.time()
+    loaded_json['last'] = lastupdate
+
+    process_info_event(loaded_json, printItemsIEC60870(loaded_json))
 
 
 # callbacks from libiec61850client
-# called by client.poll
+# also called by client.poll
 def readvaluecallback(key,data):
   logger.debug("callback: %s - %s" % (key,data))
   socketio.emit("svg_value_update_event",{ 'element' : key, 'data' : data })
@@ -184,7 +228,7 @@ def Rpt_cb(key, value):
   async_rpt[key] = value
 
 #add info to the ied datamodel tab
-def process_info_event(loaded_json): 
+def process_info_event(loaded_json, prnitems): 
   global focus
   global hosts_info
   ihost = loaded_json['host']
@@ -193,18 +237,28 @@ def process_info_event(loaded_json):
   if not ihost in hosts_info:
     hosts_info[ihost] = {}
 
-  lastupdate =  time.time()
-  loaded_json['last'] = lastupdate
-  idata = printItems(loaded_json)
-
-  hosts_info[ihost]['last'] = lastupdate
-  hosts_info[ihost]['data'] = idata
+  hosts_info[ihost]['last'] = loaded_json['last']
+  hosts_info[ihost]['data'] = prnitems
   # send data also to webclient
   if ihost==focus:
-    socketio.emit('info_event', idata)
+    socketio.emit('info_event', prnitems)
+
+
+def printItemsIEC60870(dictObjs):
+  dictObj = dictObjs['data']
+  el = 'Last update: '+str(time.strftime("%a, %d %b %Y %H:%M:%S",time.localtime(dictObjs['last'])))+'<br><br>'
+  el += '<table id="CurrentRTUModel" style="width:100%; border: 1px solid white; border-collapse: collapse;"><tr>'
+  el += '<th>ASDU</th><th>IOA</th><th>Value</th></tr>\n'
+
+  for element in dictObj:      
+      if 'value' in dictObj[element]:
+        id = "iec60870://" + dictObjs['host'] + "/" + str(dictObj[element]['value']) + "/" + str(element)
+        el += ('<tr id="'+id+'"><td style="border: 1px solid white; border-collapse: collapse;"> ' + str(dictObj[element]['ASDU']) + '</td><td style="border: 1px solid white; border-collapse: collapse;"> ' + str(element) + '</td><td style="border: 1px solid white; border-collapse: collapse;">'+ str(dictObj[element]['value']) + '</td></tr>')
+  el += ('</table>\n')
+  return el
 
 # print datamodel in table
-def printItems(dictObjs):
+def printItemsIEC61850(dictObjs):
   dictObj = dictObjs['data']
   el = 'Last update: '+str(time.strftime("%a, %d %b %Y %H:%M:%S",time.localtime(dictObjs['last'])))+'<br><br>'
   el += '<table id="CurrentIEDModel" style="width:100%; border: 1px solid white; border-collapse: collapse;"><tr>'
@@ -238,7 +292,6 @@ def worker():
   global focus
   global hosts_info
   global reset_log
-  global client
   socketio.sleep(tick)
 
   logger.info("worker treat started")
@@ -253,11 +306,12 @@ def worker():
       socketio.sleep(0.5)
 
     socketio.sleep(1)
-    client.poll()
+    for c in clients.values():
+        c.poll()
     logger.debug("values polled")
 
     # updating datamodel values
-    ieds = client.getRegisteredIEDs()
+    ieds = clients['iec61850'].getRegisteredIEDs()
     for key in ieds:
       tupl = key.split(':')
       hostname = tupl[0]
@@ -265,12 +319,14 @@ def worker():
       port = None
       if len(tupl) > 1 and tupl[1] != "":
         port = int(tupl[1])
-      model = client.getDatamodel(hostname=hostname, port=port)
+      model = clients['iec61850'].getDatamodel(hostname=hostname, port=port)
 
       loaded_json = {}
       loaded_json['host'] = key
       loaded_json['data'] = model
-      process_info_event(loaded_json)
+      lastupdate =  time.time()
+      loaded_json['last'] = lastupdate
+      process_info_event(loaded_json,printItemsIEC61850(loaded_json))
 
     while len(async_msg) > 0:
       logger.info(async_msg.pop(0))
@@ -299,6 +355,9 @@ if __name__ == '__main__':
   	local_svg = False
 
   logger.info("started")
-  client = libiec61850client.iec61850client(readvaluecallback, logger, cmdTerm_cb, Rpt_cb)
+  clients = {
+      'iec61850': libiec61850client.iec61850client(readvaluecallback, logger, cmdTerm_cb, Rpt_cb),
+      'iec60870': libiec60870client.IEC60870_5_104_client(readvaluecallback,logger)
+  }
   socketio.run(app,host="0.0.0.0") # , allow_unsafe_werkzeug=True)
 
