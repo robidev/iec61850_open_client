@@ -281,21 +281,25 @@ function svg_load(mmi){
   $("g",svgRoot).find("*").each(function(idx, el){
     //console.log("id:" + el.id );
     var cl = el.classList.toString();
-    //elements that can be interacted with by the IEC61850 client
-    if(el.id.startsWith("iec61850://") == true){    
+    //elements that can be interacted with by the IEC61850 or iec60870 client
+    if(el.id.startsWith("iec61850://") == true || el.id.startsWith("iec60870://") == true){    
       svgElementData[el.id] = {};
-      if(cl == "XCBR"){
+      if(cl == "XCBR" && el.id.startsWith("iec61850://") == true){
         socket.emit('register_datapoint', {id : el.id, class : cl});
         el.onclick = writePositionCSWI;
       }
-      if(cl == "XSWI"){
+      if(cl == "XSWI" && el.id.startsWith("iec61850://") == true){
         socket.emit('register_datapoint', {id : el.id, class : cl});
         el.onclick = writePositionCSWI;//register, to pass to CSWI element
       }
-      if(cl == "CSWI"){
+      if(cl == "CSWI" && el.id.startsWith("iec61850://") == true){
         //dont register datapoint
         el.onclick = writePosition;
         svgElementData[el.id]['position'] = true;
+      }
+      if(cl == "CBR" && el.id.startsWith("iec60870://") == true){
+        socket.emit('register_datapoint', {id : el.id, class : cl});
+        el.onclick = operDialog104;
       }
       if(cl == "MEAS"){
         socket.emit('register_datapoint', {id : el.id, class : cl});
@@ -351,6 +355,62 @@ function writePositionCSWI(event){
     ref = sibling[0].id;
   }
   operateDialog(ref);
+}
+
+function operDialog104(event){
+  var ref = this.id;
+    content = '<form>';   
+    content += '<div><b>Element: </b></div><br>';
+    content += '<div class="controlInput"><i>' + ref + '</i></div>';
+    content += '<div id="ctl_status" class="controlInput" style="background-color: #425969; margin: 2px;"><b><i>Status:</i></b> Ready</div><br>';
+
+    content += '<div><label for="ctlVal"><b>CtlVal: </b></label></div><br>';
+    content += '<input  class="controlInput" id="ctlVal" type="text" value="1"/><br>';
+
+    content += '<br><button class="controlBtn" type="submit" id="select">Select</button><br>';
+    content += '<br><button class="controlBtn" type="submit" id="operate">Operate</button><br>';
+    content += '</form>';
+
+    var dialog = new top.PopLayer({ 
+      "title": "Control model", 
+      "content": content
+    });
+
+    dialog.myPop[0].addEventListener('submit', (event) => {
+      event.preventDefault();
+      // check input values
+      var val = event.target['ctlVal'];
+      var action = event.submitter.id;
+      // submit write request
+
+      if(action == 'operate'){
+        socket.emit('operate', { id : ref, value : val.value }, function(err,errText){
+          if(err==1){
+            $('#ctl_status').css('background-color', 'green');
+            $("#ctl_status")[0].innerHTML = "<b><i>Status:</i></b> Object operated";
+            //dialog.destroy();
+          }else{
+            // show error
+            //alert("could not operate with error code:"+err);
+            $('#ctl_status').css('background-color', 'red');
+            $("#ctl_status")[0].innerHTML = "<b><i>Status:</i></b> Could not operate; error code:"+err;
+          }
+        });
+      }
+      if(action == 'select'){
+        socket.emit('select', { id : ref, value : val.value }, function(err,errText){
+          if(err==1){
+            //alert(ref + " selected!");
+            $('#ctl_status').css('background-color', 'green');
+            $("#ctl_status")[0].innerHTML = "<b><i>Status:</i></b> Object selected";
+          }else{
+            // show error
+            $('#ctl_status').css('background-color', 'red');
+            $("#ctl_status")[0].innerHTML = "<b><i>Status:</i></b> Could not select; error code:"+err;
+          }
+        });
+      }
+    });
 }
 
 function operateDialog(ref){
