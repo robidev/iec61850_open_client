@@ -297,9 +297,13 @@ function svg_load(mmi){
         el.onclick = writePosition;
         svgElementData[el.id]['position'] = true;
       }
+      if(cl == "XCBR" && el.id.startsWith("iec60870://") == true){
+        socket.emit('register_datapoint', {id : el.id, class : cl});
+        el.onclick = writePosition104;
+      }
       if(cl == "CBR" && el.id.startsWith("iec60870://") == true){
         socket.emit('register_datapoint', {id : el.id, class : cl});
-        el.onclick = operDialog104;
+        el.onclick = writePosition104CBR;
       }
       if(cl == "MEAS"){
         socket.emit('register_datapoint', {id : el.id, class : cl});
@@ -312,7 +316,6 @@ function svg_load(mmi){
       }
     }
   });
-
   socket.emit('register_datapoint_finished', '');
   // connect functions for reading/writing values and generating faults, that can socket.emit
 }
@@ -341,6 +344,24 @@ function writeValueModel(event){
   writeDialog(refid, ref);
 }
 
+
+function writePosition104(event){
+  //find a CSWI sibling, and operate on that instead
+  var ref = this.id;
+
+  var sibling = $(this).siblings(".CBR");
+  if(sibling.length > 0){
+    ref = sibling[0].id;
+  }
+  operDialog104(ref);
+}
+
+function writePosition104CBR(event){
+  //find a CSWI sibling, and operate on that instead
+  var ref = this.id;
+  operDialog104(ref);
+}
+
 function writePosition(event){
   ref = this.id;
   operateDialog(ref);
@@ -357,8 +378,7 @@ function writePositionCSWI(event){
   operateDialog(ref);
 }
 
-function operDialog104(event){
-  var ref = this.id;
+function operDialog104(ref){
     content = '<form>';   
     content += '<div><b>Element: </b></div><br>';
     content += '<div class="controlInput"><i>' + ref + '</i></div>';
@@ -367,7 +387,7 @@ function operDialog104(event){
     content += '<div><label for="ctlVal"><b>CtlVal: </b></label></div><br>';
     content += '<input  class="controlInput" id="ctlVal" type="text" value="1"/><br>';
 
-    content += '<br><button class="controlBtn" type="submit" id="select">Select</button><br>';
+    //content += '<br><button class="controlBtn" type="submit" id="select">Select</button><br>';
     content += '<br><button class="controlBtn" type="submit" id="operate">Operate</button><br>';
     content += '</form>';
 

@@ -3,6 +3,8 @@ from lib60870 import *
 from urllib.parse import urlparse
 import time
 import logging
+from threading import Lock
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -12,13 +14,13 @@ class IEC60870_5_104_client:
         tupl = ctypes.cast(parameter, ctypes.py_object).value
         if event == CS104_CONNECTION_OPENED:
             logger.info("Connection established")
-            self.connections[tupl]['state'] = 1
+            self.connections[tupl]['state'] = 2
         elif event == CS104_CONNECTION_CLOSED:
             logger.info("Connection closed")
             self.connections[tupl]['state'] = 0
         elif event == CS104_CONNECTION_STARTDT_CON_RECEIVED:
             logger.debug("Received STARTDT_CON")
-            self.connections[tupl]['state'] = 2
+            self.connections[tupl]['state'] = 3
         elif event == CS104_CONNECTION_STOPDT_CON_RECEIVED:
             logger.debug("Received STOPDT_CON")
             self.connections[tupl]['state'] = 1
@@ -33,7 +35,7 @@ class IEC60870_5_104_client:
             logger.error("error: cannot find %s in connections" % str(tupl))
             return False
 
-        logger.info("RECVD ASDU type: %s(%i) elements: %i" % (
+        logger.debug("RECVD ASDU type: %s(%i) elements: %i" % (
             TypeID_toString(CS101_ASDU_getTypeID(asdu)),
             CS101_ASDU_getTypeID(asdu),
             CS101_ASDU_getNumberOfElements(asdu)
@@ -44,81 +46,81 @@ class IEC60870_5_104_client:
 
         if (CS101_ASDU_getTypeID(asdu) == M_ME_TE_1):
 
-            logger.info("  measured scaled values with CP56Time2a timestamp:")
+            logger.debug("  measured scaled values with CP56Time2a timestamp:")
 
             for i in range(CS101_ASDU_getNumberOfElements(asdu)):
 
                 io = cast(CS101_ASDU_getElement(asdu, i), MeasuredValueScaledWithCP56Time2a) 
                 ioa = InformationObject_getObjectAddress(cast(io, InformationObject) )
                 value = MeasuredValueScaled_getValue(cast(io, MeasuredValueScaled) )
-                logger.info("    IOA: %i value: %i" % (ioa,value ))
+                logger.debug("    IOA: %i value: %i" % (ioa,value ))
                 self.connections[tupl]['data'][ioa] = {'value': value, 'ASDU': M_ME_TE_1, 'type': 'int'}
                 data[ioa] = {'value': value, 'ASDU': M_ME_TE_1, 'type': 'int'}
                 MeasuredValueScaledWithCP56Time2a_destroy(io)
 
         elif (CS101_ASDU_getTypeID(asdu) == M_SP_NA_1):
-            logger.info("  single point information:")
+            logger.debug("  single point information:")
 
             for i in range(CS101_ASDU_getNumberOfElements(asdu)):
 
                 io = cast(CS101_ASDU_getElement(asdu, i), SinglePointInformation) 
                 ioa = InformationObject_getObjectAddress(cast(io,InformationObject) )
                 value = SinglePointInformation_getValue(cast(io,SinglePointInformation) )
-                logger.info("    IOA: %i value: %i" % (ioa,value ))
+                logger.debug("    IOA: %i value: %i" % (ioa,value ))
                 self.connections[tupl]['data'][ioa] = {'value': value, 'ASDU': M_SP_NA_1, 'type': 'boolean'}
                 data[ioa] = {'value': value, 'ASDU': M_SP_NA_1, 'type': 'boolean'}
                 SinglePointInformation_destroy(io)
         elif (CS101_ASDU_getTypeID(asdu) == M_DP_NA_1):
-            logger.info("  double point information:")
+            logger.debug("  double point information:")
 
             for i in range(CS101_ASDU_getNumberOfElements(asdu)):
 
                 io = cast(CS101_ASDU_getElement(asdu, i), DoublePointInformation)
                 ioa = InformationObject_getObjectAddress(cast(io,InformationObject) ) 
                 value = DoublePointInformation_getValue(cast(io,DoublePointInformation) )
-                logger.info("    IOA: %i value: %i" % (ioa,value ))
+                logger.debug("    IOA: %i value: %i" % (ioa,value ))
                 self.connections[tupl]['data'][ioa] = {'value': value, 'ASDU': M_DP_NA_1, 'type': 'bit-string'}
                 data[ioa] = {'value': value, 'ASDU': M_DP_NA_1, 'type': 'bit-string'}
                 DoublePointInformation_destroy(io)
         elif (CS101_ASDU_getTypeID(asdu) == M_ME_NB_1):
-            logger.info("  measured value scaled:")
+            logger.debug("  measured value scaled:")
 
             for i in range(CS101_ASDU_getNumberOfElements(asdu)):
 
                 io = cast(CS101_ASDU_getElement(asdu, i), MeasuredValueScaled) 
                 ioa = InformationObject_getObjectAddress(cast(io,InformationObject) )
                 value = MeasuredValueScaled_getValue(cast(io,MeasuredValueScaled) )
-                logger.info("    IOA: %i value: %i" % (ioa,value ))
+                logger.debug("    IOA: %i value: %i" % (ioa,value ))
                 self.connections[tupl]['data'][ioa] = {'value': value, 'ASDU': M_ME_NB_1, 'type': 'int'}
                 data[ioa] = {'value': value, 'ASDU': M_ME_NB_1, 'type': 'int'}
                 MeasuredValueScaled_destroy(io)     
         elif (CS101_ASDU_getTypeID(asdu) == C_SC_NA_1):
-            logger.info("received single command response")
+            logger.debug("received single command response")
             for i in range(CS101_ASDU_getNumberOfElements(asdu)):
 
                 io = cast(CS101_ASDU_getElement(asdu, i), SinglePointInformation) 
                 ioa = InformationObject_getObjectAddress(cast(io,InformationObject) )
                 value = SinglePointInformation_getValue(cast(io,SinglePointInformation) )
-                logger.info("    IOA: %i value: %i" % (ioa,value ))
+                logger.debug("    IOA: %i value: %i" % (ioa,value ))
                 self.connections[tupl]['data'][ioa] = {'value': value, 'ASDU': C_SC_NA_1, 'type': 'boolean'}
                 data[ioa] = {'value': value, 'ASDU': C_SC_NA_1, 'type': 'boolean'}
                 SinglePointInformation_destroy(io)
 
         elif (CS101_ASDU_getTypeID(asdu) == C_DC_NA_1):
-            logger.info("received double command response")
+            logger.debug("received double command response")
             for i in range(CS101_ASDU_getNumberOfElements(asdu)):
 
                 io = cast(CS101_ASDU_getElement(asdu, i), DoublePointInformation) 
                 ioa = InformationObject_getObjectAddress(cast(io,InformationObject) )
                 value = DoublePointInformation_getValue(cast(io,DoublePointInformation) )
-                logger.info("    IOA: %i value: %i" % (ioa,value ))
+                logger.debug("    IOA: %i value: %i" % (ioa,value ))
                 self.connections[tupl]['data'][ioa] = {'value': value, 'ASDU': C_DC_NA_1, 'type': 'bit-string'}
                 data[ioa] = {'value': value, 'ASDU': C_DC_NA_1, 'type': 'bit-string'}
                 DoublePointInformation_destroy(io)
 
         elif (CS101_ASDU_getTypeID(asdu) == C_TS_TA_1):
             self.connections[tupl]['testfr_received'] += 1
-            logger.info("  received test command with timestamp. send: %i, received: %i" % (self.connections[tupl]['testfr_send'],self.connections[tupl]['testfr_received']))
+            logger.debug("  received test command with timestamp. send: %i, received: %i" % (self.connections[tupl]['testfr_send'],self.connections[tupl]['testfr_received']))
             return True
 
         if self.callback != None and len(data) > 0:
@@ -138,6 +140,7 @@ class IEC60870_5_104_client:
         self.next_poll = 0
         self.p_connectionHandler = CS104_ConnectionHandler(self.connectionHandler)
         self.p_asduReceivedHandler = CS101_ASDUReceivedHandler(self.asduReceivedHandler)
+        self.rtu_locks = defaultdict(Lock)
 
     def getRegisteredRTUs(self):
         return self.connections
@@ -156,93 +159,100 @@ class IEC60870_5_104_client:
 
     # retrieve an active connection to an RTU, and up to date datamodel, stored in 'connections'
     def getRTU(self, host, port):
-        if port == "" or port == None:
+        if not port:
             port = 2404
-
-        if host == None:
+        if not host:
             logger.error("missing hostname")
             return -1
 
         tupl = host + ":" + str(port)
-        if tupl in self.connections and self.connections[tupl]["con"] != None:
-            if self.connections[tupl]["GI"] == False:
-                con = self.connections[tupl]["con"]
-                if CS104_Connection_sendInterrogationCommand(con, CS101_COT_ACTIVATION, 1, IEC60870_QOI_STATION) == False:
-                    logger.error("error: could not send GI")
-                    CS104_Connection_sendStopDT(con)
-                    CS104_Connection_destroy(con)
-                    self.connections[tupl]["con"] = None
-                    self.connections[tupl]["state"] = 0
-                    return -1
+        lock = self.rtu_locks[tupl]
 
+        with lock:
+            # Fast path: already connected and ready
+            if tupl in self.connections:
+                conn = self.connections[tupl]
+                if conn["con"] is not None and conn["GI"] is True:
+                    return 0
+    
+            # Initialize structure if needed
+            if tupl not in self.connections:
+                self.connections[tupl] = {
+                    "con": None,
+                    "GI": False,
+                    "data": {},
+                    "state": 0,
+                    "testfr_received": 0,
+                    "testfr_send": 0,
+                    "self": tupl
+                }
+
+            conn = self.connections[tupl]
+
+            # Someone else started init but didn't finish?
+            if conn["state"] != 0:
+                # wait for them to finish
                 counter = 0
-                while self.connections[tupl]["GI"] == False and counter < self.timeout: 
+                while conn["state"] != 3 and counter < self.timeout:
                     counter += 1
                     time.sleep(1)
-                if self.connections[tupl]["GI"] == True:
-                    return 0
-                else:
-                    CS104_Connection_sendStopDT(con)
-		            #we could not perform a GI, so remove connection
-                    CS104_Connection_destroy(con)
-                    self.connections[tupl]["con"] = None
-                    self.connections[tupl]["state"] = 0
-                    return -1
-            else:
-		#we have a connection and a model
-                return 0
-		
-        if not tupl in self.connections or self.connections[tupl]["con"] == None:
-            self.connections[tupl] = {}
-            self.connections[tupl]["con"] = None
-            self.connections[tupl]["GI"] = False
-            self.connections[tupl]["data"] = {}
-            self.connections[tupl]["state"] = 0
-            self.connections[tupl]['testfr_received'] = 0
-            self.connections[tupl]['testfr_send'] = 0
-            self.connections[tupl]['self'] = tupl
 
+                return 0 if conn["GI"] else -1
+
+            # We are the initializer
+            conn["state"] = 1  # initializing
             con = CS104_Connection_create(host, port)
             if CS104_Connection_connect(con) == False:
                 logger.error("error: could not connect")
+                conn["state"] = 0
                 CS104_Connection_destroy(con)
                 return -1
 
             if CS104_Connection_sendStartDT(con) == False:
                 logger.error("error: could not send startDT")
+                conn["state"] = 0
+                CS104_Connection_destroy(con)
+                return -1
+            logger.info("connecting:" + str(tupl))
+            CS104_Connection_setConnectionHandler(con, self.p_connectionHandler, id(conn["self"]) )
+            CS104_Connection_setASDUReceivedHandler( con, self.p_asduReceivedHandler, id(conn["self"]))
+    
+            # Wait for connection state
+            counter = 0
+            while conn["state"] == 1 and counter < self.timeout:
+                counter += 1
+                time.sleep(1)
+    
+            if conn["state"] < 2:
+                conn["state"] = 0
                 CS104_Connection_destroy(con)
                 return -1
 
-            CS104_Connection_setConnectionHandler(con, self.p_connectionHandler, id(self.connections[tupl]['self']))
-            CS104_Connection_setASDUReceivedHandler(con, self.p_asduReceivedHandler, id(self.connections[tupl]['self']))
-
             counter = 0
-            while self.connections[tupl]["state"] == 0 and counter < self.timeout: 
+            while conn["state"] == 2 and counter < self.timeout:
                 counter += 1
                 time.sleep(1)
 
-            if self.connections[tupl]["state"] == 2:
-                # read the model
-                if CS104_Connection_sendInterrogationCommand(con, CS101_COT_ACTIVATION, 1, IEC60870_QOI_STATION) == False:
-                    logger.error("error: could not send GI")
-                    CS104_Connection_sendStopDT(con)
-                    CS104_Connection_destroy(con)
-                    self.connections[tupl]["state"] = 0
-                    return -1
-
-                # store the active connection
-                self.connections[tupl]["con"] = con
-                counter = 0
-                while self.connections[tupl]["GI"] == False and counter < self.timeout: 
-                    counter += 1
-                    time.sleep(1)
-                if self.connections[tupl]["GI"] == True:
-                    return 0
-            else:
-                CS104_Connection_sendStopDT(con)
+            # Perform GI
+            if not CS104_Connection_sendInterrogationCommand( con, CS101_COT_ACTIVATION, 1, IEC60870_QOI_STATION
+            ):
+                conn["state"] = 0
                 CS104_Connection_destroy(con)
-                self.connections[tupl]["state"] = 0
-                self.connections[tupl]["con"] = None
+                return -1
+
+            conn["con"] = con
+    
+            counter = 0
+            while not conn["GI"] and counter < self.timeout:
+                counter += 1
+                time.sleep(1)
+
+            if conn["GI"]:
+                return 0
+
+            conn["state"] = 0
+            CS104_Connection_destroy(con)
+            conn["con"] = None
             return -1
 
 
@@ -279,6 +289,8 @@ class IEC60870_5_104_client:
             type = _ref[0]
             ioa = _ref[1]
             return {"RTU":self.connections[tupl], "type":type, "ioa":int(ioa) }
+        else:
+            return None
 
 
     def select(self,ref, value):
@@ -377,23 +389,22 @@ class IEC60870_5_104_client:
         return 0
 
     def registerReadValue(self,ref):
-        logger.info("registerReadValue called" )
+        logger.debug("registerReadValue called" )
         retval = self.parseref(ref)
         if retval != None:
-            logger.info("RTU succesfully registered with ref:" + str(ref))
+            logger.debug("RTU succesfully registered with ref:" + str(ref))
         else:
             logger.error("Could not register RTU with ref:" + str(ref))
         return
 
     def poll(self):
-        #logger.info("poll() not implemented")
         now = time.monotonic()
         if now < self.next_poll:
             return
-        self.next_poll = now + 5.0 # 5 second later
+        self.next_poll = now + 1.0 # interval in seconds
 
         for tupl in self.connections:
-            if self.connections[tupl]["state"] == 2:
+            if self.connections[tupl]["state"] == 3:
                 # send a GI
                 con = self.connections[tupl]['con']
                 if CS104_Connection_sendInterrogationCommand(con, CS101_COT_ACTIVATION, 1, IEC60870_QOI_STATION) == False:
@@ -403,7 +414,7 @@ class IEC60870_5_104_client:
                     self.connections[tupl]["state"] = 0
                     return
                 else:
-                    logger.info("GI send!")
+                    logger.debug("GI send!")
         return
 
 def testcallb(tupl, data):

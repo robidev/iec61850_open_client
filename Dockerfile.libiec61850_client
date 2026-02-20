@@ -12,16 +12,16 @@ ENV DEBIAN_FRONTEND=
 RUN git clone -b v1.6 https://github.com/mz-automation/libiec61850.git /tmp/libiec61850
 
 RUN cd /tmp/libiec61850 && make dynlib \
-	&& cp build/libiec61850.so /usr/local/lib/
+	&&  cp build/libiec61850.so /usr/local/lib/
 
 RUN git clone -b master https://github.com/mz-automation/lib60870.git /tmp/lib60870
 
 RUN cd /tmp/lib60870/lib60870-C && make dynlib \
-	&& cp build/liblib60870.so /usr/local/lib/libiec60870.so
+	&&  cp build/liblib60870.so /usr/local/lib/libiec60870.so
 
 COPY ./requirements.txt /srv/iec61850_open_client/requirements.txt
 
-RUN cd /srv/iec61850_open_client && pip3 install --break-system-packages -r requirements.txt
+RUN cd /srv/iec61850_open_client && pip3 install --break-system-packages -r requirements.txt 
 
 COPY . /srv/iec61850_open_client
 
