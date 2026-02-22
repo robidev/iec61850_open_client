@@ -142,17 +142,17 @@ $(document).ready(function() {
     }
   });
 
-function abbreviate_number(num, fixed) {
-  if (num === null) { return null; } // terminate early
-  if (num === 0) { return '0'; } // terminate early
-  fixed = (!fixed || fixed < 0) ? 0 : fixed; // number of decimal places to show
-  var b = (num).toPrecision(2).split("e"), // get power
-      k = b.length === 1 ? 0 : Math.floor(Math.min(b[1].slice(1), 14) / 3), // floor at decimals, ceiling at trillions
-      c = k < 1 ? num.toFixed(0 + fixed) : (num / Math.pow(10, k * 3) ).toFixed(1 + fixed), // divide by power
-      d = c < 0 ? c : Math.abs(c), // enforce -0 is 0
-      e = d + ['', 'K', 'M', 'B', 'T'][k]; // append power
-  return e;
-}
+  function abbreviate_number(num, fixed) {
+    if (num === null) { return null; } // terminate early
+    if (num === 0) { return '0'; } // terminate early
+    fixed = (!fixed || fixed < 0) ? 0 : fixed; // number of decimal places to show
+    var b = (num).toPrecision(2).split("e"), // get power
+        k = b.length === 1 ? 0 : Math.floor(Math.min(b[1].slice(1), 14) / 3), // floor at decimals, ceiling at trillions
+        c = k < 1 ? num.toFixed(0 + fixed) : (num / Math.pow(10, k * 3) ).toFixed(1 + fixed), // divide by power
+        d = c < 0 ? c : Math.abs(c), // enforce -0 is 0
+        e = d + ['', 'K', 'M', 'B', 'T'][k]; // append power
+    return e;
+  }
 
   //send by server when a log-line should be added to a tab
   //if the tab did not exist yet, create it
@@ -195,6 +195,38 @@ function abbreviate_number(num, fixed) {
   socket.on('page_reload', function (data) {
     location.reload();
   });
+
+  // Splitter functionality
+  const splitter = document.querySelector('.splitter');
+  const wrap = document.querySelector('.wrap');
+  let isDragging = false;
+  let startX;
+  let startWidth;
+
+  splitter.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    startX = e.clientX;
+    const cols = getComputedStyle(wrap).gridTemplateColumns.split(' ');
+    startWidth = parseInt(cols[0]);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const deltaX = e.clientX - startX;
+    const newWidth = Math.max(200, startWidth + deltaX);
+    wrap.style.gridTemplateColumns = `${newWidth}px 5px auto`;
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  });
+
 });
 
 /********************************************************/
