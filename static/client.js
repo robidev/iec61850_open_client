@@ -50,7 +50,7 @@ $(document).ready(function() {
     var element = data['element'];
     var value = data['data']['value'];
     var type = data['data']['type'];
-    if( type == 'bit-string'){//invert endian if type is bit-string
+    if( type == 'bit-string' && data['data'].ASDU == undefined ){//invert endian if type is bit-string, and not IEC60870, but IEC61850
       if(value == '1')
         value = '2';
       else if(value == '2')
@@ -76,7 +76,7 @@ $(document).ready(function() {
         }
         if(cl == "XCBR" || cl == "XSWI"){
           if(type == 'boolean'){
-            if(value=='True'){
+            if(value=='True'){ // TODO: perhaps this is inverted?
               if(svgElementData[el.id]['position'] != true) {
                 $("#open",el)[0].beginElement();
                 svgElementData[el.id]['position'] = true;
