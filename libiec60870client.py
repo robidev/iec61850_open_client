@@ -318,10 +318,10 @@ class IEC60870_5_104_client:
             ca = 1 # common address
             if obj['type'] == "45":
                 dc = cast(SingleCommand_create(None, obj['ioa'], int(value), False, 0), InformationObject)
-                logger.info("Send operate command C_SC_NA_1")
+                logger.info("Send operate command C_SC_NA_1 with value:" + str(value))
             elif obj['type'] == "46":
                 dc = cast(DoubleCommand_create(None, obj['ioa'], int(value), False, 0), InformationObject)
-                logger.info("Send operate command C_DC_NA_1")
+                logger.info("Send operate command C_DC_NA_1 with value:" + str(value))
             else:
                 return 0
 

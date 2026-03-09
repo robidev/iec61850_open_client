@@ -50,7 +50,7 @@ $(document).ready(function() {
     var element = data['element'];
     var value = data['data']['value'];
     var type = data['data']['type'];
-    if( type == 'bit-string' && data['data'].ASDU == undefined ){//invert endian if type is bit-string, and not IEC60870, but IEC61850
+    if( type == 'bit-string' && data['data'].ASDU == undefined ){//invert endian if type is bit-string, and not IEC60870, but IEC61850 (for modbus and iec60870 values are not inverted)
       if(value == '1')
         value = '2';
       else if(value == '2')
@@ -76,7 +76,7 @@ $(document).ready(function() {
         }
         if(cl == "XCBR" || cl == "XSWI"){
           if(type == 'boolean'){
-            if(value=='True'){ // TODO: perhaps this is inverted?
+            if(value=='True'){ //
               if(svgElementData[el.id]['position'] != true) {
                 $("#open",el)[0].beginElement();
                 svgElementData[el.id]['position'] = true;
@@ -333,9 +333,9 @@ function svg_load(mmi){
         socket.emit('register_datapoint', {id : el.id, class : cl});
         el.onclick = writePosition104;
       }
-      if(cl == "CBR" && el.id.startsWith("iec60870://") == true){
+      if(cl == "CSWI" && el.id.startsWith("iec60870://") == true){
         socket.emit('register_datapoint', {id : el.id, class : cl});
-        el.onclick = writePosition104CBR;
+        el.onclick = writePosition104CSWI;
       }
       if(cl == "MEAS"){
         socket.emit('register_datapoint', {id : el.id, class : cl});
@@ -381,15 +381,14 @@ function writePosition104(event){
   //find a CSWI sibling, and operate on that instead
   var ref = this.id;
 
-  var sibling = $(this).siblings(".CBR");
+  var sibling = $(this).siblings(".CSWI");
   if(sibling.length > 0){
     ref = sibling[0].id;
   }
   operDialog104(ref);
 }
 
-function writePosition104CBR(event){
-  //find a CSWI sibling, and operate on that instead
+function writePosition104CSWI(event){
   var ref = this.id;
   operDialog104(ref);
 }
@@ -411,13 +410,23 @@ function writePositionCSWI(event){
 }
 
 function operDialog104(ref){
+    var ctlVal = 'unknown';
+    if(ref in svgElementData && 'position' in svgElementData[ref]){
+      if(svgElementData[ref]['position'] == true){
+        ctlVal = 'open';
+      }
+      else{
+        ctlVal = 'close';
+      }
+    } 
+
     content = '<form>';   
     content += '<div><b>Element: </b></div><br>';
     content += '<div class="controlInput"><i>' + ref + '</i></div>';
     content += '<div id="ctl_status" class="controlInput" style="background-color: #425969; margin: 2px;"><b><i>Status:</i></b> Ready</div><br>';
 
     content += '<div><label for="ctlVal"><b>CtlVal: </b></label></div><br>';
-    content += '<input  class="controlInput" id="ctlVal" type="text" value="1"/><br>';
+    content += '<input  class="controlInput" id="ctlVal" type="text" value="' + ctlVal + '"/><br>';
 
     //content += '<br><button class="controlBtn" type="submit" id="select">Select</button><br>';
     content += '<br><button class="controlBtn" type="submit" id="operate">Operate</button><br>';
@@ -432,11 +441,24 @@ function operDialog104(ref){
       event.preventDefault();
       // check input values
       var val = event.target['ctlVal'];
+      var operval = -1;
+      if(val.value === "close" || val.value === "true" || val.value === "1"){
+        operval = 1;
+      }
+      if(val.value === "open" || val.value === "false" || val.value === "0"){
+        operval = 0;
+      }
+      if(operval == -1){
+        alert("invalid ctlVal:" + val.value + " use: 'open' or 'close'");
+        return;
+      }
+
+
       var action = event.submitter.id;
       // submit write request
 
       if(action == 'operate'){
-        socket.emit('operate', { id : ref, value : val.value }, function(err,errText){
+        socket.emit('operate', { id : ref, value : operval }, function(err,errText){
           if(err==1){
             $('#ctl_status').css('background-color', 'green');
             $("#ctl_status")[0].innerHTML = "<b><i>Status:</i></b> Object operated";
@@ -450,7 +472,7 @@ function operDialog104(ref){
         });
       }
       if(action == 'select'){
-        socket.emit('select', { id : ref, value : val.value }, function(err,errText){
+        socket.emit('select', { id : ref, value : operval }, function(err,errText){
           if(err==1){
             //alert(ref + " selected!");
             $('#ctl_status').css('background-color', 'green');
