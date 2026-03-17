@@ -3,7 +3,7 @@ from lib60870 import *
 from urllib.parse import urlparse
 import time
 import logging
-from threading import Lock
+from threading import Lock, Thread, Event
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
@@ -13,11 +13,13 @@ class IEC60870_5_104_client:
     def connectionHandler (self, parameter, connection, event):
         tupl = ctypes.cast(parameter, ctypes.py_object).value
         if event == CS104_CONNECTION_OPENED:
-            logger.info("Connection established")
+            logger.info("104 Connection established: %s" % str(tupl))
             self.connections[tupl]['state'] = 2
         elif event == CS104_CONNECTION_CLOSED:
-            logger.info("Connection closed")
+            logger.info("104 Connection closed: %s" % str(tupl))
             self.connections[tupl]['state'] = 0
+            CS104_Connection_destroy(self.connections[tupl]["con"])
+            self.connections[tupl]["con"] = None
         elif event == CS104_CONNECTION_STARTDT_CON_RECEIVED:
             logger.debug("Received STARTDT_CON")
             self.connections[tupl]['state'] = 3
@@ -140,7 +142,17 @@ class IEC60870_5_104_client:
         self.next_poll = 0
         self.p_connectionHandler = CS104_ConnectionHandler(self.connectionHandler)
         self.p_asduReceivedHandler = CS101_ASDUReceivedHandler(self.asduReceivedHandler)
-        self.rtu_locks = defaultdict(Lock)
+        self.connection_locks = {}
+        self.stop_event = Event()
+        self.connection_worker =  Thread(target=self.connection_worker_thread)
+        self.connection_worker.start()
+
+
+    def stop_worker(self):
+        self.stop_event.set()
+        if self.connection_worker is not None:
+            self.connection_worker.join(timeout=3)
+
 
     def getRegisteredRTUs(self):
         return self.connections
@@ -156,6 +168,50 @@ class IEC60870_5_104_client:
         tupl = hostname + ":" + str(port)
         return self.connections[tupl]['data']
 
+    def connection_worker_thread(self):
+        while not self.stop_event.is_set():
+			# iterate over self.connections
+            for tupl in self.connections.keys():
+                if tupl not in self.connection_locks:
+                    continue
+
+                with self.connection_locks[tupl]:
+                    if self.connections[tupl]["con"] != None:
+                        if self.connections[tupl]["GI"] is True:
+                            continue
+                        else:
+                            # Perform GI
+                            if not CS104_Connection_sendInterrogationCommand( self.connections[tupl]["con"], CS101_COT_ACTIVATION, 1, IEC60870_QOI_STATION):
+                                self.connections[tupl]["state"] = 0
+                                CS104_Connection_destroy(self.connections[tupl]["con"])
+                                self.connections[tupl]["con"] = None
+                            continue
+                    # else no con
+                    host, port = tupl.split(":")
+                    con = CS104_Connection_create(host, int(port))
+                    CS104_Connection_setConnectionHandler(con, self.p_connectionHandler, id(self.connections[tupl]["self"]) )
+                    CS104_Connection_setASDUReceivedHandler( con, self.p_asduReceivedHandler, id(self.connections[tupl]["self"]))
+
+                                       
+                    if CS104_Connection_connect(con) == False:
+                        logger.debug("error: could not connect to %s" % str(tupl))
+                        self.connections[tupl]["state"] = 0
+                        CS104_Connection_destroy(con)
+                        continue
+
+                    logger.info("connected:" + str(tupl)) 
+                    if CS104_Connection_sendStartDT(con) == False:
+                        logger.error("error: could not send startDT")
+                        self.connections[tupl]["state"] = 0
+                        CS104_Connection_destroy(con)
+                        continue
+
+                    self.connections[tupl]["con"] = con
+                    #with
+                #for
+            time.sleep(1.0)
+
+    
 
     # retrieve an active connection to an RTU, and up to date datamodel, stored in 'connections'
     def getRTU(self, host, port):
@@ -166,93 +222,27 @@ class IEC60870_5_104_client:
             return -1
 
         tupl = host + ":" + str(port)
-        lock = self.rtu_locks[tupl]
+        if tupl not in self.connection_locks:
+            self.connection_locks[tupl] = Lock()
 
-        with lock:
+        with self.connection_locks[tupl]:
             # Fast path: already connected and ready
             if tupl in self.connections:
-                conn = self.connections[tupl]
-                if conn["con"] is not None and conn["GI"] is True:
+                if self.connections[tupl]["con"] is not None and self.connections[tupl]["GI"] is True:
                     return 0
+                else:
+                    return -1
     
             # Initialize structure if needed
-            if tupl not in self.connections:
-                self.connections[tupl] = {
-                    "con": None,
-                    "GI": False,
-                    "data": {},
-                    "state": 0,
-                    "testfr_received": 0,
-                    "testfr_send": 0,
-                    "self": tupl
-                }
-
-            conn = self.connections[tupl]
-
-            # Someone else started init but didn't finish?
-            if conn["state"] != 0:
-                # wait for them to finish
-                counter = 0
-                while conn["state"] != 3 and counter < self.timeout:
-                    counter += 1
-                    time.sleep(1)
-
-                return 0 if conn["GI"] else -1
-
-            # We are the initializer
-            conn["state"] = 1  # initializing
-            con = CS104_Connection_create(host, port)
-            if CS104_Connection_connect(con) == False:
-                logger.error("error: could not connect")
-                conn["state"] = 0
-                CS104_Connection_destroy(con)
-                return -1
-
-            if CS104_Connection_sendStartDT(con) == False:
-                logger.error("error: could not send startDT")
-                conn["state"] = 0
-                CS104_Connection_destroy(con)
-                return -1
-            logger.info("connecting:" + str(tupl))
-            CS104_Connection_setConnectionHandler(con, self.p_connectionHandler, id(conn["self"]) )
-            CS104_Connection_setASDUReceivedHandler( con, self.p_asduReceivedHandler, id(conn["self"]))
-    
-            # Wait for connection state
-            counter = 0
-            while conn["state"] == 1 and counter < self.timeout:
-                counter += 1
-                time.sleep(1)
-    
-            if conn["state"] < 2:
-                conn["state"] = 0
-                CS104_Connection_destroy(con)
-                return -1
-
-            counter = 0
-            while conn["state"] == 2 and counter < self.timeout:
-                counter += 1
-                time.sleep(1)
-
-            # Perform GI
-            if not CS104_Connection_sendInterrogationCommand( con, CS101_COT_ACTIVATION, 1, IEC60870_QOI_STATION
-            ):
-                conn["state"] = 0
-                CS104_Connection_destroy(con)
-                return -1
-
-            conn["con"] = con
-    
-            counter = 0
-            while not conn["GI"] and counter < self.timeout:
-                counter += 1
-                time.sleep(1)
-
-            if conn["GI"]:
-                return 0
-
-            conn["state"] = 0
-            CS104_Connection_destroy(con)
-            conn["con"] = None
+            self.connections[tupl] = {
+                "con": None,
+                "GI": False,
+                "data": {},
+                "state": 0,
+                "testfr_received": 0,
+                "testfr_send": 0,
+                "self": tupl
+            }
             return -1
 
 
@@ -391,10 +381,6 @@ class IEC60870_5_104_client:
     def registerReadValue(self,ref):
         logger.debug("registerReadValue called" )
         retval = self.parseref(ref)
-        if retval != None:
-            logger.debug("RTU succesfully registered with ref:" + str(ref))
-        else:
-            logger.error("Could not register RTU with ref:" + str(ref))
         return
 
     def poll(self):

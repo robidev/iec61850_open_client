@@ -10,6 +10,8 @@ import time
 import sys
 import os
 import logging
+import atexit
+import signal
 
 import libiec61850client
 import libiec60870client
@@ -192,6 +194,7 @@ def register_datapoint(data):
   if uri.scheme in clients:
       with clients_lock[uri.scheme]:
           clients[uri.scheme].registerReadValue(str(data['id']))
+  return 0
 
 
 # web UI: load datamodels for registered IED's
@@ -203,22 +206,7 @@ def register_datapoint_finished(data):
   for key in ieds:
     tupl = key.split(':')
     hostname = tupl[0]
-
     emit('log_event', {'host':key,'data':'[+] adding IED info','clear':1})
-
-    port = None
-    if len(tupl) > 1 and tupl[1] != "":
-      port = int(tupl[1])
-    with clients_lock['iec61850']:
-        model = clients['iec61850'].getDatamodel(hostname=hostname, port=port)
-
-    loaded_json = {}
-    loaded_json['host'] = key
-    loaded_json['data'] = model
-    lastupdate =  time.time()
-    loaded_json['last'] = lastupdate
-
-    process_info_event(loaded_json,printItemsIEC61850(loaded_json))
   
   with clients_lock['iec60870']:
       rtus = clients['iec60870'].getRegisteredRTUs()
@@ -226,19 +214,7 @@ def register_datapoint_finished(data):
     tupl = key.split(':')
     hostname = tupl[0]
     emit('log_event', {'host':key,'data':'[+] adding RTU info','clear':1})
-    port = None
-    if len(tupl) > 1 and tupl[1] != "":
-      port = int(tupl[1])
-    with clients_lock['iec60870']:
-        model = clients['iec60870'].getIOA_list(hostname=hostname, port=port)
 
-    loaded_json = {}
-    loaded_json['host'] = key
-    loaded_json['data'] = model
-    lastupdate =  time.time()
-    loaded_json['last'] = lastupdate
-
-    process_info_event(loaded_json, printItemsIEC60870(loaded_json))
 
 
 # callbacks from libiec61850client
@@ -404,6 +380,17 @@ def worker():
       logger.debug("%s updated via report" % key)
         
 
+def teardown():
+    logger.info("received kill signal")
+    for _client in clients.values():
+      _client.stop_worker()
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    os.kill(os.getpid(), signal.SIGINT)
+
+
+atexit.register(teardown)
+signal.signal(signal.SIGINT, lambda *args: teardown())
+signal.signal(signal.SIGTERM, lambda *args: teardown())
 
 if __name__ == '__main__':
   logger = logging.getLogger('webserver')
@@ -419,8 +406,8 @@ if __name__ == '__main__':
 	# note the `logger` from above is now properly configured
 
   if len(sys.argv) > 1 and sys.argv[1] == "-nD": #use different svg for debug
-  	local_svg = False
-
+    local_svg = False
+     
   logger.info("started")
   clients = {
       'iec61850': libiec61850client.iec61850client(readvaluecallback61850, logger, cmdTerm_cb, Rpt_cb),

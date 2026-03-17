@@ -103,6 +103,7 @@ class IedClientError(Enum):
 
 LOGGER = logging.getLogger(__name__)
 
+
 class iec61850client():
 
 	def __init__(self, readvaluecallback = None, loggerRef = None, cmdTerm_cb = None, Rpt_cb = None):
@@ -120,6 +121,15 @@ class iec61850client():
 
 		self.cb_refs = [] # used to ensure the garbage collector does not clean up used callbacks
 		self.reporting = {} # used on reconnect to reenable the rcb's
+
+		self.stop_event = threading.Event()
+		self.connection_worker =  threading.Thread(target=self.connection_worker_thread)
+		self.connection_worker.start()
+
+	def stop_worker(self):
+		self.stop_event.set()
+		if self.connection_worker is not None:
+			self.connection_worker.join(timeout=3)
 
 
 	@staticmethod
@@ -556,6 +566,148 @@ class iec61850client():
 				iec61850client.printrefs(model[element],_ref, depth + 1)
 
 
+	def getDataModel(self, tupl):
+		con = self.connections[tupl]["con"]
+		model = iec61850client.discovery(con)
+		if model: #if model is not empty
+			# store the model
+			self.connections[tupl]["model"] = model
+
+			#reenable the rcb's if applicable
+			if tupl in self.reporting and len(self.reporting[tupl]) > 0:
+				for refdata in self.reporting[tupl]:
+					rcb = refdata["rcb"]
+					error = lib61850.IedClientError()
+					rcb = lib61850.IedConnection_getRCBValues(con, ctypes.byref(error), refdata["RPT"], rcb)
+					RptId = lib61850.ClientReportControlBlock_getRptId(rcb)
+					lib61850.IedConnection_installReportHandler(con, refdata["RPT"], RptId, refdata["cbh"], id(refdata["refdata"]))
+
+					lib61850.ClientReportControlBlock_setRptEna(rcb, True)
+					lib61850.ClientReportControlBlock_setGI(rcb, True)
+					lib61850.IedConnection_setRCBValues(con, ctypes.byref(error), rcb, lib61850.RCB_ELEMENT_RPT_ENA | lib61850.RCB_ELEMENT_GI, False)
+					refdata["rcb"] = rcb
+			return 0
+		
+		self.connections[tupl]["con"] = None
+		lib61850.IedConnection_destroy(con)
+		return -1
+
+	def connection_worker_thread(self):
+		while not self.stop_event.is_set():
+			# iterate over self.connections
+			for tupl in self.connections.keys():
+				if tupl not in self.connection_locks:
+					continue
+
+				with self.connection_locks[tupl]:
+					if self.connections[tupl]["con"] != None:
+						if self.connections[tupl]["model"]:
+							#we have a connection and a model
+
+							if len(self.connections[tupl]['datapoints']) > self.connections[tupl]['datapoints_registered']:
+								con = self.connections[tupl]['con']
+								model = self.connections[tupl]['model']
+
+								start = self.connections[tupl]['datapoints_registered']  # number already done
+								for datapoint in self.connections[tupl]['datapoints'][start:]:
+									uri_ref = urlparse(datapoint)
+
+									#check if the ref exists in the model
+									submodel, path = iec61850client.parseRef(model, uri_ref.path[1:])
+									if submodel:
+										rpt = self.registerForReporting(datapoint, tupl, uri_ref.path[1:])
+										if rpt == False:
+											# fallback to periodic poll when no report+dataset configured
+											#if we allready have it in the list
+											self.polling[datapoint] = 1
+									else:
+										LOGGER.error("could not find %s in model" % uri_ref.path[1:])
+									self.connections[tupl]['datapoints_registered'] += 1
+							continue
+						else:
+							con = self.connections[tupl]["con"]
+							LOGGER.info("discovery: %s" % tupl)
+							self.getDataModel(tupl)
+							continue
+					# else, con == None
+					con = lib61850.IedConnection_create()
+					self.connections[tupl]['datapoints_registered'] = 0 # reset the registered datapoints
+					self.connections[tupl]["model"] = {}
+
+					#		/* To change MMS parameters you need to get access to the underlying MmsConnection */
+					#mmsConnection = lib61850.IedConnection_getMmsConnection(con)
+					#    /* Get the container for the parameters */
+					#parameters = lib61850.MmsConnection_getIsoConnectionParameters(mmsConnection)
+					#    /* set remote AP-Title according to SCL file example from IEC 61850-8-1 */
+					#lib61850.IsoConnectionParameters_setRemoteApTitle(parameters, "1.3.9999.13", 12)
+					#    /* just some arbitrary numbers */
+					#lib61850.IsoConnectionParameters_setLocalApTitle(parameters, "1.2.1200.15.3", 1);
+					#    /* use this to skip AP-Title completely - this may be required by some "obscure" servers */
+					#lib61850.IsoConnectionParameters_setRemoteApTitle(parameters, None, 0);
+					#lib61850.IsoConnectionParameters_setLocalApTitle(parameters, None, 0);
+
+					#    TSelector localTSelector = { 3, { 0x00, 0x01, 0x02 } };
+					localTSelector = lib61850.TSelector(
+							size=3,
+							value=(ctypes.c_uint8 * 4)(0x00, 0x01, 0x02, 0x00)  # last element padded
+						)
+					#    TSelector remoteTSelector = { 2, { 0x00, 0x01 } };
+					remoteTSelector = lib61850.TSelector(
+							size=2,
+							value=(ctypes.c_uint8 * 4)(0x00, 0x01, 0x00, 0x00)  # last 2 elements padded
+						)
+					#    SSelector remoteSSelector = { 2, { 0, 1 } };
+					remoteSSelector = lib61850.SSelector(
+							size=2,
+							value=(ctypes.c_uint8 * 16)(0x00, 0x01, *([0x00] * 14))  # last 14 elements padded
+						)
+					#    SSelector localSSelector = { 5, { 0, 1, 2, 3, 4 } };
+					localSSelector = lib61850.SSelector(
+							size=5,
+							value=(ctypes.c_uint8 * 16)(0x00, 0x01, 0x02, 0x03, 0x04, *([0x00] * 11))  # last 11 elements padded
+						)
+					#    PSelector localPSelector = {4, { 0x12, 0x34, 0x56, 0x78 } };
+					localPSelector = lib61850.PSelector(
+							size=4,
+							value=(ctypes.c_uint8 * 16)(0x12, 0x34, 0x56, 0x78, *([0x00] * 12))  # 
+						)
+					#    PSelector remotePSelector = {4, { 0x87, 0x65, 0x43, 0x21 } };
+					remotePSelector = lib61850.PSelector(
+							size=4,
+							value=(ctypes.c_uint8 * 16)(0x87, 0x65, 0x43, 0x21, *([0x00] * 12))  # 
+						)
+					#    /* change parameters for presentation, session and transport layers */
+					#lib61850.IsoConnectionParameters_setRemoteAddresses(parameters, remotePSelector, remoteSSelector, localTSelector)
+					#lib61850.IsoConnectionParameters_setLocalAddresses(parameters, localPSelector, localSSelector, remoteTSelector)
+				
+					#
+					#    /* use authentication */
+					#auth = lib61850.AcseAuthenticationParameter_create();
+					#lib61850.AcseAuthenticationParameter_setAuthMechanism(auth, lib61850.ACSE_AUTH_PASSWORD);
+					#password = "user1@testpw";
+					#lib61850.AcseAuthenticationParameter_setPassword(auth, password);
+					#lib61850.IsoConnectionParameters_setAcseAuthenticationParameter(parameters, auth);
+					#lib61850.IedConnection_setConnectTimeout(con, 10000);
+
+
+					error = lib61850.IedClientError()
+					host,port  = tupl.split(":")
+					#LOGGER.info("connecting: %s" % str(tupl))
+					lib61850.IedConnection_connect(con,ctypes.byref(error), host, int(port))
+					if error.value == lib61850.IED_ERROR_OK:
+						# store the active connection
+						self.connections[tupl]["con"] = con
+						# read the model on next iteration
+						LOGGER.info("connected: %s" % str(tupl))
+					else:
+						LOGGER.debug("error: could not connect to %s" % str(tupl))
+						self.connections[tupl]["con"] = None
+						lib61850.IedConnection_destroy(con)
+					# connection_lock
+				# for loop end
+			time.sleep(1.0)
+
+
 	# retrieve an active connection to IED, and up to date datamodel, stored in 'connections'
 	def getIED(self, host, port):
 		if port == "" or port == None:
@@ -570,122 +722,20 @@ class iec61850client():
 			self.connection_locks[tupl] = threading.Lock()
 
 		with self.connection_locks[tupl]:
-			if tupl in self.connections and self.connections[tupl]["con"] != None:
-				if not self.connections[tupl]["model"]:
-					con = self.connections[tupl]["con"]
-					LOGGER.info("getIED1: %s" % tupl)
-					model = iec61850client.discovery(con)
-					if model: #if model is not empty
-						# store the model
-						self.connections[tupl]["model"] = model
-						return 0
-					else:
-						#we could not perform a discovery, so remove connection
-						self.connections[tupl]["con"] = None
-						lib61850.IedConnection_destroy(con)
-						return -1
-				else:
+			if tupl in self.connections:
+				if self.connections[tupl]["con"] != None and self.connections[tupl]["model"]:
 					#we have a connection and a model
 					return 0
-			
-			if not tupl in self.connections:
-				self.connections[tupl] = {}
-				self.connections[tupl]["con"] = None
-				self.connections[tupl]["model"] = {}
-
-			con = lib61850.IedConnection_create()
-
-			#		/* To change MMS parameters you need to get access to the underlying MmsConnection */
-			#mmsConnection = lib61850.IedConnection_getMmsConnection(con)
-			#    /* Get the container for the parameters */
-			#parameters = lib61850.MmsConnection_getIsoConnectionParameters(mmsConnection)
-			#    /* set remote AP-Title according to SCL file example from IEC 61850-8-1 */
-			#lib61850.IsoConnectionParameters_setRemoteApTitle(parameters, "1.3.9999.13", 12)
-			#    /* just some arbitrary numbers */
-			#lib61850.IsoConnectionParameters_setLocalApTitle(parameters, "1.2.1200.15.3", 1);
-			#    /* use this to skip AP-Title completely - this may be required by some "obscure" servers */
-			#lib61850.IsoConnectionParameters_setRemoteApTitle(parameters, None, 0);
-			#lib61850.IsoConnectionParameters_setLocalApTitle(parameters, None, 0);
-
-			#    TSelector localTSelector = { 3, { 0x00, 0x01, 0x02 } };
-			localTSelector = lib61850.TSelector(
-			    	size=3,
-	    			value=(ctypes.c_uint8 * 4)(0x00, 0x01, 0x02, 0x00)  # last element padded
-				)
-			#    TSelector remoteTSelector = { 2, { 0x00, 0x01 } };
-			remoteTSelector = lib61850.TSelector(
-			    	size=2,
-	    			value=(ctypes.c_uint8 * 4)(0x00, 0x01, 0x00, 0x00)  # last 2 elements padded
-				)
-			#    SSelector remoteSSelector = { 2, { 0, 1 } };
-			remoteSSelector = lib61850.SSelector(
-			    	size=2,
-	    			value=(ctypes.c_uint8 * 16)(0x00, 0x01, *([0x00] * 14))  # last 14 elements padded
-				)
-			#    SSelector localSSelector = { 5, { 0, 1, 2, 3, 4 } };
-			localSSelector = lib61850.SSelector(
-			    	size=5,
-	    			value=(ctypes.c_uint8 * 16)(0x00, 0x01, 0x02, 0x03, 0x04, *([0x00] * 11))  # last 11 elements padded
-				)
-			#    PSelector localPSelector = {4, { 0x12, 0x34, 0x56, 0x78 } };
-			localPSelector = lib61850.PSelector(
-			    	size=4,
-	    			value=(ctypes.c_uint8 * 16)(0x12, 0x34, 0x56, 0x78, *([0x00] * 12))  # 
-				)
-			#    PSelector remotePSelector = {4, { 0x87, 0x65, 0x43, 0x21 } };
-			remotePSelector = lib61850.PSelector(
-			    	size=4,
-	    			value=(ctypes.c_uint8 * 16)(0x87, 0x65, 0x43, 0x21, *([0x00] * 12))  # 
-				)
-			#    /* change parameters for presentation, session and transport layers */
-			#lib61850.IsoConnectionParameters_setRemoteAddresses(parameters, remotePSelector, remoteSSelector, localTSelector)
-			#lib61850.IsoConnectionParameters_setLocalAddresses(parameters, localPSelector, localSSelector, remoteTSelector)
-		
-			#
-			#    /* use authentication */
-			#auth = lib61850.AcseAuthenticationParameter_create();
-			#lib61850.AcseAuthenticationParameter_setAuthMechanism(auth, lib61850.ACSE_AUTH_PASSWORD);
-			#password = "user1@testpw";
-			#lib61850.AcseAuthenticationParameter_setPassword(auth, password);
-			#lib61850.IsoConnectionParameters_setAcseAuthenticationParameter(parameters, auth);
-			#lib61850.IedConnection_setConnectTimeout(con, 10000);
-
-
-			error = lib61850.IedClientError()
-			lib61850.IedConnection_connect(con,ctypes.byref(error), host, port)
-			if error.value == lib61850.IED_ERROR_OK:
-				# store the active connection
-				self.connections[tupl]["con"] = con
-				# read the model
-				LOGGER.info("getIED2: %s" % tupl)
-				model = iec61850client.discovery(con)
-				if model: #if model is not empty
-					# store the model
-					self.connections[tupl]["model"] = model
-
-					#reenable the rcb's if applicable
-					if tupl in self.reporting and len(self.reporting[tupl]) > 0:
-						for refdata in self.reporting[tupl]:
-							rcb = refdata["rcb"]
-							error = lib61850.IedClientError()
-							rcb = lib61850.IedConnection_getRCBValues(con, ctypes.byref(error), refdata["RPT"], rcb)
-							RptId = lib61850.ClientReportControlBlock_getRptId(rcb)
-							lib61850.IedConnection_installReportHandler(con, refdata["RPT"], RptId, refdata["cbh"], id(refdata["refdata"]))
-
-							lib61850.ClientReportControlBlock_setRptEna(rcb, True)
-							lib61850.ClientReportControlBlock_setGI(rcb, True)
-							lib61850.IedConnection_setRCBValues(con, ctypes.byref(error), rcb, lib61850.RCB_ELEMENT_RPT_ENA | lib61850.RCB_ELEMENT_GI, False)
-							refdata["rcb"] = rcb
-
-					return 0
-				else:
-					self.connections[tupl]["con"] = None
-					lib61850.IedConnection_destroy(con)
+				else: # connection is known, but no connection or model atm.
 					return -1
-			else:
-				self.connections[tupl]["con"] = None
-				lib61850.IedConnection_destroy(con)
-				return -1
+			
+			self.connections[tupl] = {}
+			self.connections[tupl]["con"] = None
+			self.connections[tupl]["model"] = {}
+			self.connections[tupl]['datapoints'] = []
+			self.connections[tupl]['datapoints_registered'] = 0
+			return -1
+
 			
 	# write a value to an active connection
 	def registerWriteValue(self, ref, value):
@@ -874,12 +924,11 @@ class iec61850client():
 				LOGGER.info("RPT found! Ref:%s" % LD + "/" + LN + "." + RP)
 				RPT = LD + "/" + LN + "." + model[LD][LN][RP]["DatSet"]["FC"] + "." + RP
 
-				error = lib61850.IedClientError()
 				if RPT in self.cb_refs:
 					LOGGER.info("RPT allready registered")
 					return True
 
-
+				error = lib61850.IedClientError()
 				rcb = lib61850.IedConnection_getRCBValues(con, ctypes.byref(error), RPT, None)
 				RptId = lib61850.ClientReportControlBlock_getRptId(rcb)
 
@@ -943,27 +992,11 @@ class iec61850client():
 
 		tupl = uri_ref.hostname + ":" + str(port)
 
-		#check if connection is active, or reconnect
+		#add ied if not known yet and ref
 		err = self.getIED(uri_ref.hostname, port)
-		if err == 0:
-			#only add an IED if it could be connected to
-			con = self.connections[tupl]['con']
-			model = self.connections[tupl]['model']
-			#check if the ref exists in the model
-			submodel, path = iec61850client.parseRef(model, uri_ref.path[1:])
-			if submodel:
-				rpt = self.registerForReporting(ref, tupl, uri_ref.path[1:])
-				if rpt == False:
-					# fallback to periodic poll when no report+dataset configured
-					#if we allready have it in the list
-					self.polling[ref] = 1
-				#self.polling[ref] = 1
-				return 0
-			else:
-				LOGGER.error("could not find %s in model" % uri_ref.path[1:])
-		else:
-			LOGGER.error("no connection to IED: %s:%s, ref:%s not registered" % (uri_ref.hostname, port, ref) )
-		return -1
+		with self.connection_locks[tupl]:
+			self.connections[tupl]['datapoints'].append(ref)
+		return 0
 
 
 	# retrieve all registered values by polling
