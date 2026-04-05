@@ -103,6 +103,9 @@ class IedClientError(Enum):
 
 LOGGER = logging.getLogger(__name__)
 
+def scheme():
+	return "iec61850"
+
 
 class iec61850client():
 
@@ -125,6 +128,12 @@ class iec61850client():
 		self.stop_event = threading.Event()
 		self.connection_worker =  threading.Thread(target=self.connection_worker_thread)
 		self.connection_worker.start()
+		logger.info("iec61850client initialised")
+
+	@staticmethod
+	def ErrorCodes(value):
+		return IedClientError(value).name
+	
 
 	def stop_worker(self):
 		self.stop_event.set()
@@ -924,11 +933,17 @@ class iec61850client():
 				LOGGER.info("RPT found! Ref:%s" % LD + "/" + LN + "." + RP)
 				RPT = LD + "/" + LN + "." + model[LD][LN][RP]["DatSet"]["FC"] + "." + RP
 
+				error = lib61850.IedClientError()
 				if RPT in self.cb_refs:
 					LOGGER.info("RPT allready registered")
+					rcb = lib61850.IedConnection_getRCBValues(con, ctypes.byref(error), RPT, None)
+					if lib61850.ClientReportControlBlock_getRptEna(rcb):
+						LOGGER.info("RPT allready enabled")
+					else:
+						LOGGER.info("RPT disabled")
 					return True
 
-				error = lib61850.IedClientError()
+
 				rcb = lib61850.IedConnection_getRCBValues(con, ctypes.byref(error), RPT, None)
 				RptId = lib61850.ClientReportControlBlock_getRptId(rcb)
 
