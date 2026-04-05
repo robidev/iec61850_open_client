@@ -6,6 +6,7 @@ import time
 import threading
 import lib61850
 import logging
+from abstract_client import abstract_client
 
 from urllib.parse import urlparse
 from enum import Enum
@@ -107,7 +108,7 @@ def scheme():
 	return "iec61850"
 
 
-class iec61850client():
+class iec61850client(abstract_client):
 
 	def __init__(self, readvaluecallback = None, loggerRef = None, cmdTerm_cb = None, Rpt_cb = None):
 		global LOGGER
@@ -128,7 +129,7 @@ class iec61850client():
 		self.stop_event = threading.Event()
 		self.connection_worker =  threading.Thread(target=self.connection_worker_thread)
 		self.connection_worker.start()
-		logger.info("iec61850client initialised")
+		LOGGER.info("iec61850client initialised")
 
 	@staticmethod
 	def ErrorCodes(value):
@@ -1016,7 +1017,7 @@ class iec61850client():
 
 	# retrieve all registered values by polling
 	def poll(self):
-		for key in self.polling:
+		for key in list(self.polling):
 			uri_ref = urlparse(key)
 
 			port = uri_ref.port
