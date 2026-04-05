@@ -731,20 +731,45 @@ class iec61850client(abstract_client):
 		if tupl not in self.connection_locks:
 			self.connection_locks[tupl] = threading.Lock()
 
-		with self.connection_locks[tupl]:
+		lock = self.connection_locks[tupl]
+
+		# don't wait if another thread is already working on it
+		if not lock.acquire(blocking=False):
+			return -2   # busy / connection in progress
+
+		try:
 			if tupl in self.connections:
-				if self.connections[tupl]["con"] != None and self.connections[tupl]["model"]:
-					#we have a connection and a model
-					return 0
-				else: # connection is known, but no connection or model atm.
-					return -1
-			
-			self.connections[tupl] = {}
-			self.connections[tupl]["con"] = None
-			self.connections[tupl]["model"] = {}
-			self.connections[tupl]['datapoints'] = []
-			self.connections[tupl]['datapoints_registered'] = 0
+				conn = self.connections[tupl]
+				if conn["con"] is not None and conn["model"]:
+					return 0 #we have a connection and a model
+				return -1  # connection is known, but no connection or model atm.
+
+			self.connections[tupl] = {
+				"con": None,
+				"model": {},
+				"datapoints": [],
+				"datapoints_registered": 0
+			}
+
 			return -1
+
+		finally:
+			lock.release()
+
+
+		#with self.connection_locks[tupl]:
+		#	if tupl in self.connections:
+		#		if self.connections[tupl]["con"] != None and self.connections[tupl]["model"]:
+		#			#we have a connection and a model
+		#			return 0
+		#		else: # connection is known, but no connection or model atm.
+		#			return -1	
+		#	self.connections[tupl] = {}
+		#	self.connections[tupl]["con"] = None
+		#	self.connections[tupl]["model"] = {}
+		#	self.connections[tupl]['datapoints'] = []
+		#	self.connections[tupl]['datapoints_registered'] = 0
+		#	return -1
 
 			
 	# write a value to an active connection
@@ -1010,7 +1035,7 @@ class iec61850client(abstract_client):
 
 		#add ied if not known yet and ref
 		err = self.getIED(uri_ref.hostname, port)
-		with self.connection_locks[tupl]:
+		with self.connection_locks[tupl]: # connection_locks[tupl] and connections[tupl] will exist due to getIED creating it, if its not there yet
 			self.connections[tupl]['datapoints'].append(ref)
 		return 0
 

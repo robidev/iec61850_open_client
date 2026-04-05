@@ -186,6 +186,11 @@ def cancel(data):
   return -1, "Operation not supported for this protocol"
 
 
+# datapoints that could not be registered (usually because the downstream client
+# failed to connect during init). We'll retry registration periodically.
+PENDING_REGISTRATION_RETRY_SEC = 10.0
+pending_registrations = {}  # id -> last attempt timestamp (time.time())
+
 # register datapoint for polling/reporting
 @socketio.on('register_datapoint', namespace='')
 def register_datapoint(data):
@@ -193,8 +198,33 @@ def register_datapoint(data):
   uri = urlparse(data['id'])
   if uri.scheme in clients:
       with clients_lock[uri.scheme]:
-          clients[uri.scheme].registerReadValue(str(data['id']))
+        ret = clients[uri.scheme].registerReadValue(str(data['id']))
+        if ret != 0:
+          logger.warning("could not register datapoint %s (ret=%s), will retry" % (str(data['id']), ret))
+          pending_registrations[str(data['id'])] = time.time()
+          return ret
+
+        # success: no longer pending
+        pending_registrations.pop(str(data['id']), None)
+      return 0
+  else:
+     logger.warning("could not register datapoint %s: invalid scheme" % str(data['id']))
   return 0
+
+
+def retry_pending_registrations():
+  now = time.time()
+  for data_id, last_attempt in list(pending_registrations.items()):
+    if now - last_attempt < PENDING_REGISTRATION_RETRY_SEC:
+      continue
+
+    logger.debug("retrying datapoint registration for %s" % data_id)
+    if register_datapoint({'id': data_id}) == 0:
+       logger.info("register datapoint %s succesfull on retry" % data_id)
+    else:
+       logger.debug("could still not register datapoint %s, will retry" % data_id)
+
+
 
 
 # web UI: load datamodels for registered IED's
@@ -317,6 +347,9 @@ def worker():
       socketio.sleep(0.5)
 
     socketio.sleep(1)
+    # in case we need to retry some registered connections
+    retry_pending_registrations()
+
     for scheme, c in clients.items():
         with clients_lock[scheme]:
             c.poll()
@@ -392,11 +425,12 @@ atexit.register(teardown)
 signal.signal(signal.SIGINT, lambda *args: teardown())
 signal.signal(signal.SIGTERM, lambda *args: teardown())
 
+
+
 if __name__ == '__main__':
-  logger = logging.getLogger('webserver')
   logging.basicConfig(format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
     level=logging.INFO)
-
+  logger = logging.getLogger('webserver')
   shm = socketHandler(socketio)
   shm.setLevel(logging.INFO)
   fmm = logging.Formatter('%(asctime)s %(name)-12s %(levelname)-8s %(message)s')

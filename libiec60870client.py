@@ -225,14 +225,20 @@ class IEC60870_5_104_client:
         if tupl not in self.connection_locks:
             self.connection_locks[tupl] = Lock()
 
-        with self.connection_locks[tupl]:
+        lock = self.connection_locks[tupl]
+
+        # Don't wait if another thread is already handling this RTU
+        if not lock.acquire(blocking=False):
+            return -2   # busy / connection attempt in progress
+
+        try:
             # Fast path: already connected and ready
             if tupl in self.connections:
-                if self.connections[tupl]["con"] is not None and self.connections[tupl]["GI"] is True:
+                conn = self.connections[tupl]
+                if conn["con"] is not None and conn["GI"] is True:
                     return 0
-                else:
-                    return -1
-    
+                return -1
+
             # Initialize structure if needed
             self.connections[tupl] = {
                 "con": None,
@@ -243,7 +249,12 @@ class IEC60870_5_104_client:
                 "testfr_send": 0,
                 "self": tupl
             }
+
             return -1
+
+        finally:
+            lock.release()
+            
 
 
     def parseref(self,ref):
@@ -380,8 +391,10 @@ class IEC60870_5_104_client:
 
     def registerReadValue(self,ref):
         logger.debug("registerReadValue called" )
-        retval = self.parseref(ref)
-        return
+        if self.parseref(ref) == None:
+            return -1 # signal error in case ref could not be parsed/connected (at this moment)
+        return 0
+        
 
     def poll(self):
         now = time.monotonic()
