@@ -382,11 +382,11 @@ class IEC60870_5_104_client:
 
 
     def ReadValue(self,ref):
-        logger.info("ReadValue not implemented, called with:" + str(ref))
+        logger.warning("ReadValue not implemented, called with:" + str(ref))
         return 0
 
     def registerWriteValue(self,ref,val):
-        logger.info("registerWriteValue not implemented, called with:" + str(ref) + ", with val:" + str(val))
+        logger.warning("registerWriteValue not implemented, called with:" + str(ref) + ", with val:" + str(val))
         return 0
 
     def registerReadValue(self,ref):

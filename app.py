@@ -200,7 +200,7 @@ def register_datapoint(data):
       with clients_lock[uri.scheme]:
         ret = clients[uri.scheme].registerReadValue(str(data['id']))
         if ret != 0:
-          logger.warning("could not register datapoint %s (ret=%s), will retry" % (str(data['id']), ret))
+          logger.debug("could not register datapoint %s (ret=%s), will retry" % (str(data['id']), ret))
           pending_registrations[str(data['id'])] = time.time()
           return ret
 
@@ -214,7 +214,12 @@ def register_datapoint(data):
 
 def retry_pending_registrations():
   now = time.time()
-  for data_id, last_attempt in list(pending_registrations.items()):
+  pending_items = list(pending_registrations.items())
+  if len(pending_items) == 0:
+    return
+
+  logger.info("retrying pending datapoints. %i pending..." % len(pending_items))
+  for data_id, last_attempt in pending_items:
     if now - last_attempt < PENDING_REGISTRATION_RETRY_SEC:
       continue
 
