@@ -204,7 +204,7 @@ class iec61850client(abstract_client):
 		error = lib61850.IedClientError()
 		dataAttributes = lib61850.IedConnection_getDataDirectoryFC(con, ctypes.byref(error), doRef)
 
-		if error.value != 0:
+		if error.value != lib61850.IED_ERROR_OK:
 			LOGGER.error("could not get logical device list, error:%i" % error.value)
 
 		if dataAttributes:
@@ -228,7 +228,7 @@ class iec61850client(abstract_client):
 					fc = lib61850.FunctionalConstraint_fromString(fcName) 
 					value = lib61850.IedConnection_readObject(con, ctypes.byref(error), daRef, fc)
 
-					if error.value == 0:
+					if error.value == lib61850.IED_ERROR_OK:
 						tmodel[daName[:-4]]['value'], tmodel[daName[:-4]]['type'] = iec61850client.printValue(value)
 						lib61850.MmsValue_delete(value)
 
@@ -246,7 +246,7 @@ class iec61850client(abstract_client):
 		error = lib61850.IedClientError()
 		deviceList = lib61850.IedConnection_getLogicalDeviceList(con, ctypes.byref(error))
 
-		if error.value != 0:
+		if error.value != lib61850.IED_ERROR_OK:
 			LOGGER.error("could not get logical device list, error:%i" % error.value)
 
 		if deviceList:
@@ -256,7 +256,7 @@ class iec61850client(abstract_client):
 				tmodel[LD_name] = {}
 
 				logicalNodes = lib61850.IedConnection_getLogicalDeviceDirectory(con, ctypes.byref(error), LD_name)
-				if error.value != 0:#ret becomes int if connection is lost
+				if error.value != lib61850.IED_ERROR_OK:#ret becomes int if connection is lost
 					lib61850.LinkedList_destroy(deviceList)
 					return tmodel
 					
@@ -267,7 +267,7 @@ class iec61850client(abstract_client):
 
 					#[LNobjects, error] = iec61850.IedConnection_getLogicalNodeVariables(con, LD_name+"/"+LN_name)
 					LNobjects = lib61850.IedConnection_getLogicalNodeDirectory(con, ctypes.byref(error), LD_name+"/"+LN_name,lib61850.ACSI_CLASS_DATA_OBJECT)
-					if error.value != 0:#ret becomes int if connection is lost
+					if error.value != lib61850.IED_ERROR_OK:#ret becomes int if connection is lost
 						lib61850.LinkedList_destroy(logicalNodes)
 						lib61850.LinkedList_destroy(deviceList)
 						return model
@@ -285,7 +285,7 @@ class iec61850client(abstract_client):
 					lib61850.LinkedList_destroy(LNobjects)
 
 					LNdss = lib61850.IedConnection_getLogicalNodeDirectory(con, ctypes.byref(error), LD_name+"/"+LN_name, lib61850.ACSI_CLASS_DATA_SET)
-					if error.value != 0:#ret becomes int if connection is lost
+					if error.value != lib61850.IED_ERROR_OK:#ret becomes int if connection is lost
 						lib61850.LinkedList_destroy(logicalNodes)
 						lib61850.LinkedList_destroy(deviceList)
 						return tmodel
@@ -299,7 +299,7 @@ class iec61850client(abstract_client):
 						#
 						isDel = ctypes.c_bool(False)
 						dataSetMembers = lib61850.IedConnection_getDataSetDirectory(con, ctypes.byref(error), LD_name+"/"+LN_name+"."+DSname, ctypes.byref(isDel))  
-						if error.value != 0:#ret becomes int if connection is lost
+						if error.value != lib61850.IED_ERROR_OK:#ret becomes int if connection is lost
 							lib61850.LinkedList_destroy(LNdss)
 							lib61850.LinkedList_destroy(logicalNodes)
 							lib61850.LinkedList_destroy(deviceList)
@@ -331,7 +331,7 @@ class iec61850client(abstract_client):
 
 
 					LNrpp = lib61850.IedConnection_getLogicalNodeDirectory(con, ctypes.byref(error), LD_name+"/"+LN_name, lib61850.ACSI_CLASS_URCB)
-					if error.value != 0:#ret becomes int if connection is lost
+					if error.value != lib61850.IED_ERROR_OK:#ret becomes int if connection is lost
 						lib61850.LinkedList_destroy(logicalNodes)
 						lib61850.LinkedList_destroy(deviceList)
 						return tmodel
@@ -350,7 +350,7 @@ class iec61850client(abstract_client):
 
 
 					LNbrr = lib61850.IedConnection_getLogicalNodeDirectory(con, ctypes.byref(error), LD_name+"/"+LN_name, lib61850.ACSI_CLASS_BRCB)
-					if error.value != 0:#ret becomes int if connection is lost
+					if error.value != lib61850.IED_ERROR_OK:#ret becomes int if connection is lost
 						lib61850.LinkedList_destroy(logicalNodes)
 						lib61850.LinkedList_destroy(deviceList)
 						return tmodel
@@ -451,7 +451,7 @@ class iec61850client(abstract_client):
 		error = lib61850.IedClientError()
 		lib61850.IedConnection_writeObject(con, ctypes.byref(error), ref, fc, mmsvalue)
 		lib61850.MmsValue_delete(mmsvalue)
-		if error.value == 0:
+		if error.value == lib61850.IED_ERROR_OK:
 			model, err = iec61850client.updateValueInModel(con, model, ref)
 			return model, err
 		return model, error.value
@@ -476,7 +476,7 @@ class iec61850client(abstract_client):
 					fc = lib61850.FunctionalConstraint_fromString(fcName) 
 					error = lib61850.IedClientError()
 					value = lib61850.IedConnection_readObject(con, ctypes.byref(error), ref, fc)
-					if error.value == 0:
+					if error.value == lib61850.IED_ERROR_OK:
 						submodel[ path[0] ]['value'],  submodel[ path[0] ]['type'] = iec61850client.printValue(value)
 						lib61850.MmsValue_delete(value)
 						recurse_err = 0
@@ -586,15 +586,21 @@ class iec61850client(abstract_client):
 			#reenable the rcb's if applicable
 			if tupl in self.reporting and len(self.reporting[tupl]) > 0:
 				for refdata in self.reporting[tupl]:
-					rcb = refdata["rcb"]
+					#rcb = refdata["rcb"]
 					error = lib61850.IedClientError()
 					rcb = lib61850.IedConnection_getRCBValues(con, ctypes.byref(error), refdata["RPT"], rcb)
+					if error.value != lib61850.IED_ERROR_OK:
+						LOGGER.error("could not retrieve RCBValues")
+						continue
 					RptId = lib61850.ClientReportControlBlock_getRptId(rcb)
 					lib61850.IedConnection_installReportHandler(con, refdata["RPT"], RptId, refdata["cbh"], id(refdata["refdata"]))
 
 					lib61850.ClientReportControlBlock_setRptEna(rcb, True)
 					lib61850.ClientReportControlBlock_setGI(rcb, True)
 					lib61850.IedConnection_setRCBValues(con, ctypes.byref(error), rcb, lib61850.RCB_ELEMENT_RPT_ENA | lib61850.RCB_ELEMENT_GI, False)
+					if error.value != lib61850.IED_ERROR_OK:
+						LOGGER.error("could not write RCBValues")
+						continue
 					refdata["rcb"] = rcb
 			return 0
 		
@@ -963,6 +969,10 @@ class iec61850client(abstract_client):
 				if RPT in self.cb_refs:
 					LOGGER.info("RPT allready registered")
 					rcb = lib61850.IedConnection_getRCBValues(con, ctypes.byref(error), RPT, None)
+					if error.value != lib61850.IED_ERROR_OK:
+						LOGGER.error("could not retrieve RCBValues for allready registered RCB, maybe RCB is not enabled")
+						return True
+					
 					if lib61850.ClientReportControlBlock_getRptEna(rcb):
 						LOGGER.info("RPT allready enabled")
 					else:
@@ -971,6 +981,10 @@ class iec61850client(abstract_client):
 
 
 				rcb = lib61850.IedConnection_getRCBValues(con, ctypes.byref(error), RPT, None)
+				if error.value != lib61850.IED_ERROR_OK:
+					LOGGER.error("could not retrieve RCBValues for unregistered RCB")
+					continue
+
 				RptId = lib61850.ClientReportControlBlock_getRptId(rcb)
 
 				cbh = lib61850.ReportCallbackFunction(self.ReportHandler_cb)
@@ -1003,6 +1017,8 @@ class iec61850client(abstract_client):
 				lib61850.ClientReportControlBlock_setRptEna(rcb, True)
 				lib61850.ClientReportControlBlock_setGI(rcb, True)
 				lib61850.IedConnection_setRCBValues(con, ctypes.byref(error), rcb, lib61850.RCB_ELEMENT_RPT_ENA | lib61850.RCB_ELEMENT_GI, True)
+				if error.value != lib61850.IED_ERROR_OK:
+					LOGGER.error("could not write RCBValues for newly registered RCB") # not sure if this should use continue, return True or return False
 
 				return True
 		LOGGER.error("could not find report for dataset")
